@@ -174,29 +174,30 @@ itself only needs checkpoint A.
       `comp4020-skill-installation-guide.md`, `example-skill-adaptation.md`
       (commit as part of the harness, or gitignore). Split the DSH skill-loading
       notes out of `CLAUDE.md` so `CLAUDE.md` can hold the project's rules.
-- [ ] **T02 [agent]** Project skeleton: `server/` (Node + TS), `client/`
+- [x] **T02 [agent]** Project skeleton: `server/` (Node + TS), `client/`
       (React + Vite), scripts `dev`, `build`, `start`; `pnpm check` still runs
       the shipped `spec/`.
-- [ ] **T03 [agent]** `/readme/` rendered from `README.md` server-side, images
+- [x] **T03 [agent]** `/readme/` rendered from `README.md` server-side, images
       resolve; `/` answers 200.
-- [ ] **T04 [agent]** SQLite open + migrations at boot (`node:sqlite`,
+- [x] **T04 [agent]** SQLite open + migrations at boot (`node:sqlite`,
       `DATA_DIR` env, default `./data`, `/data` in Docker).
-- [ ] **T05 [agent]** Auth API: sign up (username rules: 3–20 chars
+- [x] **T05 [agent]** Auth API: sign up (username rules: 3–20 chars
       `[a-z0-9_-]`, case-insensitive unique; password ≥ 8), log in, log out,
       `me`; scrypt; session cookie; login rate limit; "no email = no recovery"
       warning in the sign-up UI.
-- [ ] **T06 [agent]** Seed `demo1`/`demo2` at boot (idempotent); block
+- [x] **T06 [agent]** Seed `demo1`/`demo2` at boot (idempotent); block
       password change for demo accounts.
-- [ ] **T07 [agent]** Home: directory of all users → link to `/u/<username>`;
-      "my board" link; log out.
-- [ ] **T08 [agent]** Board page with **infinite canvas**: pan (drag empty
+- [x] ~~**T07 [agent]** Home: directory of all users → link to `/u/<username>`;
+      "my board" link; log out.~~ Superseded: signed in, you land on your own
+      board at `/`; other boards are `/<username>` (see `checkpoint1.md`).
+- [x] **T08 [agent]** Board page with **infinite canvas**: pan (drag empty
       space / scroll), zoom (wheel/pinch, clamped), world coordinates stored on
       notes; touch works on phones.
-- [ ] **T09 [agent]** Notes via REST: create, edit text/colour/visibility,
+- [x] **T09 [agent]** Notes via REST: create, edit text/colour/visibility,
       move, delete, enforcing the permission table above; private-note
       filtering per viewer.
-- [ ] **T10 [agent]** Leave notes on another user's board (public/private).
-- [ ] **T11 [agent]** `spec/` checks (against the running app):
+- [x] **T10 [agent]** Leave notes on another user's board (public/private).
+- [x] **T11 [agent]** `spec/` checks (against the running app):
       - private note on A's board is absent from B's view of it
       - private note B leaves on A's board is visible to A, not to C
       - a visitor can't move/delete someone else's note on A's board

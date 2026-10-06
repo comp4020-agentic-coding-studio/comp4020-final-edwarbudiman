@@ -53,3 +53,38 @@ checkpoints that can each be shipped. Each task is marked as mine or the
 agent's, and the README, this file and the reflections are mine. Building
 happens in a fresh session that starts from that backlog, so the plan, not a
 long chat, is the handoff between sessions.
+
+## Switching to Claude Code for the build
+
+DeepSeek Harness spun the backlog off into a first working version: a server,
+a client, and the spec checks passing. But it wasn't getting at what I
+wanted. It built the backlog faithfully, including a dashboard of users and
+a warm "paper" look, when what I actually had in mind was simpler: open the
+app and you're on your own board, like Excalidraw, with nothing in the way.
+
+So I spun up Claude Code with Opus and used it to give feedback on what I
+wanted, rather than handing it the backlog again. I told it to forget the
+pre-made design and refine the core first:
+
+- **The look.** White and minimal, like Excalidraw. It asked me first
+  whether I wanted the hand-drawn style or a clean one; I chose clean for now,
+  with the note styles and font kept as tokens so I can change them later.
+- **The flow.** No dashboard: after log-in you're on your own board at `/`,
+  showing only your notes; other people's boards are at `/<username>`.
+- **The interactions.** Select notes (one, or several with a box or
+  Shift-click), copy and paste them, double-click to edit in place. Then
+  labels with a filter, and other people's live cursors with avatars you can
+  click to follow.
+
+Before building, it asked me the questions that changed what it would do
+(multi-select or single, what "focus" on double-click means, which visual
+style), and it pushed back where it disagreed: it argued against putting the
+saved-boards navigation on the right before we settle where chat and
+presence go, so that part is still being discussed. It tested in the browser
+as it went and caught two real bugs I would have hit (double-clicking a note
+created a new one on top of it; typing straight after creating a note lost
+the first letters). I then checked everything by hand.
+
+The personal board is done for this checkpoint
+([`957d95c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/957d95c)),
+and so far it's all good.
