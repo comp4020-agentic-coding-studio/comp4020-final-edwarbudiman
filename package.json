@@ -4,7 +4,12 @@
   "type": "module",
   "scripts": {
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
-    "typecheck": "tsc --noEmit",
+    "dev": "node scripts/dev.ts",
+    "dev:server": "node --watch --disable-warning=ExperimentalWarning server/src/index.ts",
+    "dev:client": "vite --config client/vite.config.ts",
+    "build": "vite build --config client/vite.config.ts",
+    "start": "node --disable-warning=ExperimentalWarning server/src/index.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p client",
     "check": "pnpm typecheck && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
     "test": "vitest run"
@@ -12,11 +17,39 @@
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
     "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^6.1.1",
     "jsdom": "^30.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "typescript": "^6.0.3",
+    "vite": "^8.3.2",
     "vitest": "^5.0.1"
   },
   "engines": {
     "pnpm": ">=11"
-  }
+  },
+  "dependencies": {
+    "marked": "^18.0.14",
+    "ws": "^8.22.0"
+  },
+  "version": "1.0.0",
+  "description": "<!-- TEMPLATE: this file is yours, and the deployed app publishes it in full at      /readme/, where visitors and markers read it. The final project brief says      what it covers. Replace everything in it, this comment included. -->",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/issues"
+  },
+  "homepage": "https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman#readme"
 }

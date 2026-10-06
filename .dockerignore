@@ -11,3 +11,11 @@ dist
 mise.local.toml
 *.pem
 .claude
+data
+.dsh-skills
+.vscode
+CLAUDE.local.md
+COMP4020-SKILLS-INSTALLED.md
+comp4020-skill-installation-guide.md
+example-skill-adaptation.md
+client/dist

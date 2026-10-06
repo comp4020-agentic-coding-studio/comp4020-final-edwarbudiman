@@ -20,3 +20,15 @@ mise.local.toml
 # your course API key, and this repo goes public when you ship. Your tracked
 # harness is CLAUDE.md (and any AGENTS.md), not this directory.
 .claude/
+
+# local SQLite data (Docker and Fly use /data)
+data/
+
+# DSH harness bits kept local (T01): course skills, editor settings, notes on
+# installing them, and the DSH skill-loading instructions (CLAUDE.local.md)
+.dsh-skills/
+.vscode/
+CLAUDE.local.md
+COMP4020-SKILLS-INSTALLED.md
+comp4020-skill-installation-guide.md
+example-skill-adaptation.md
