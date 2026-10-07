@@ -8,7 +8,7 @@ import { Link, useSession } from "../router.tsx";
 import { Header } from "./Header.tsx";
 import { Chat } from "./Chat.tsx";
 import { SpaceLayer } from "../space/SpaceLayer.tsx";
-import type { Phase } from "../space/SpaceLayer.tsx";
+import type { Phase, RoomLink } from "../space/SpaceLayer.tsx";
 import { can3D, initialMode, rememberMode } from "../space/viewMode.ts";
 
 export const NOTE_W = 200;
@@ -153,6 +153,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const lastCursorRef = useRef(0);
   const joinedOnce = useRef(false);
   const chatHandler = useRef<((m: ServerMsg) => void) | null>(null);
+  const roomHandler = useRef<((m: ServerMsg) => void) | null>(null); // avatars in the 3D room
   const keyMove = useRef<{ ids: number[]; timer: number } | null>(null);
   const justCreated = useRef<number | null>(null);
   const placed = useRef(false); // the first view is set from the notes (or a saved one)
@@ -364,6 +365,11 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         joinedOnce.current = true;
         if (typeof m.sid === "string") setMySid(m.sid);
         setCursors({});
+        roomHandler.current?.(m);
+        return;
+      case "avatar":
+      case "avatar:leave":
+        roomHandler.current?.(m);
         return;
       case "presence": {
         setPresence({ users: m.users as string[], anon: m.anon as number });
@@ -1261,6 +1267,11 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     void createNoteAt(w.x - NOTE_W / 2, w.y - NOTE_H / 2);
   }
 
+  const roomLink = useMemo<RoomLink>(
+    () => ({ send: (m) => sockRef.current?.send(m), register: (h) => (roomHandler.current = h), colorOf: peerColor, mySid }),
+    [mySid],
+  );
+
   // what the board on the 3D wall shows: exactly this view of the notes
   const shot = useMemo(() => {
     const el = viewportRef.current;
@@ -1398,6 +1409,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           <SpaceLayer
             phase={phase}
             shot={shot}
+            link={roomLink}
             onEntered={() => {
               setPhase("3d");
               rememberMode("3d");
@@ -1684,7 +1696,8 @@ const SHORTCUTS: [string, string][] = [
   ["Show all notes", "Shift 1"],
   ["Clear the selection", "Esc"],
   ["Board ↔ 3D room", "M"],
-  ["In the room: walk, look, open the board", "W A S D, drag, E (Shift runs, Space jumps)"],
+  ["In the room: walk, look, open the board", "W A S D, mouse (click to capture it), E (Shift runs, Space jumps)"],
+  ["In the room: first ↔ third person", "V"],
 ];
 
 function ShortcutsDialog({ onClose }: { onClose: () => void }) {

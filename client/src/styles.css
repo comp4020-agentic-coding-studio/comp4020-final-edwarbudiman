@@ -1315,11 +1315,8 @@ table.stats tr + tr {
 }
 .space-canvas {
   display: block;
-  cursor: grab;
+  cursor: pointer;
   touch-action: none;
-}
-.space-canvas:active {
-  cursor: grabbing;
 }
 .space-canvas:focus-visible {
   outline: none;
@@ -1352,4 +1349,15 @@ table.stats tr + tr {
 .space-hint.near {
   color: var(--ink);
   box-shadow: var(--island-shadow), 0 0 0 2px var(--accent);
+}
+.crosshair {
+  position: absolute;
+  z-index: 15;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px rgb(30 30 36 / 0.7);
+  pointer-events: none;
 }

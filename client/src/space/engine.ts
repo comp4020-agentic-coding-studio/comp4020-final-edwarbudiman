@@ -6,9 +6,14 @@
 // notes and its pan and zoom), and the camera's "fill" pose makes that wall
 // board cover the screen pixel for pixel. So both transitions are one camera
 // move: pull back from the fill pose into the room, or dolly into it.
+//
+// In the room you are a person: first person (the camera is your eyes) or
+// third person (it follows behind you), with the mouse captured for looking
+// around, as in a shooter. Others on the same board stand in the room too.
 
 import * as THREE from "three";
 import type { Note } from "../api.ts";
+import { Avatar } from "./avatar.ts";
 
 export interface BoardShot {
   notes: Note[]; // bottom to top
@@ -21,7 +26,17 @@ export interface BoardShot {
 export interface SpaceHandlers {
   focusBoard: () => void;
   near: (near: boolean) => void;
+  locked: (locked: boolean) => void; // the mouse is captured for looking around
+  move: (at: Where) => void; // where you stand now, for the others in the room
 }
+/** Where someone stands: feet on the floor at y = 0, yaw 0 facing the board. */
+export interface Where {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+}
+export type CameraView = "first" | "third";
 interface Pose {
   pos: THREE.Vector3;
   yaw: number;
@@ -57,6 +72,10 @@ const JUMP = 5.2;
 const GRAVITY = 16;
 const BODY = 0.3; // how close you get to walls and furniture
 const REACH = 2.8; // how near the board E works
+const LOOK = 0.0022; // radians per pixel of mouse movement
+const BEHIND = 3; // third person: how far the camera sits behind your head
+const SEND_MS = 100; // ~10 position updates a second while moving
+const VIEW_KEY = "postits:camera";
 
 const FILL_D = BOARD_H / 2 / Math.tan(THREE.MathUtils.degToRad(FOV / 2));
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -103,16 +122,22 @@ export class Space {
   private handlers: SpaceHandlers | null = null;
   private host: HTMLElement | null = null;
 
-  private pose: Pose = { pos: new THREE.Vector3(), yaw: 0, pitch: 0 };
-  private saved: Pose | null = null; // where you stood when you last left
+  private cam: Pose = { pos: new THREE.Vector3(), yaw: 0, pitch: 0 }; // the camera
+  private me: Pose; // you: feet position, facing and where you look
+  private view: CameraView;
+  private self = new Avatar("#4f5bd5"); // your body, seen in third person
+  private selfColor = "#4f5bd5";
+  private speed = 0;
   private vy = 0;
   private keys = new Set<string>();
-  private anim: { from: Pose; to: Pose; t0: number; done: () => void } | null = null;
+  private anim: { from: Pose; to: Pose; t0: number; ms: number; done: () => void } | null = null;
   private walking = false;
+  private seq = 0; // bumped on every enter, leave and pause, so a stale glide can't start you walking
   private raf = 0;
   private last = 0;
   private wasNear = false;
-  private drag: { id: number; x: number; y: number; moved: boolean } | null = null;
+  private sent: { at: number; where: Where | null } = { at: 0, where: null };
+  private peers = new Map<string, { avatar: Avatar; target: Where; speed: number }>();
   private raycaster = new THREE.Raycaster();
 
   constructor() {
@@ -133,11 +158,21 @@ export class Space {
     this.scene.add(this.board, this.frame);
     this.buildRoom();
 
-    const el = this.renderer.domElement;
-    el.addEventListener("pointerdown", this.onPointerDown);
-    el.addEventListener("pointermove", this.onPointerMove);
-    el.addEventListener("pointerup", this.onPointerUp);
-    el.addEventListener("pointercancel", this.onPointerUp);
+    // you start back from the board, looking at it
+    this.me = { pos: new THREE.Vector3(0, 0, WALL_Z + 4.3), yaw: 0, pitch: 0 };
+    this.me.pitch = Math.atan2(BOARD_Y - EYE, this.me.pos.z - BOARD_Z);
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(VIEW_KEY);
+    } catch {
+      /* not remembered */
+    }
+    this.view = saved === "third" ? "third" : "first";
+    this.scene.add(this.self.group);
+
+    this.renderer.domElement.addEventListener("click", this.onClick);
+    document.addEventListener("pointerlockchange", this.onLockChange);
+    document.addEventListener("mousemove", this.onMouseMove);
   }
 
   // ---------------------------------------------------------------- the room
@@ -352,18 +387,35 @@ export class Space {
   private fillPose(): Pose {
     return { pos: new THREE.Vector3(0, BOARD_Y, BOARD_Z + FILL_D), yaw: 0, pitch: 0 };
   }
-  /** Where you stand the first time: back from the board, looking at it. */
-  private startPose(): Pose {
-    const pos = new THREE.Vector3(0, EYE, WALL_Z + 4.3);
-    return { pos, yaw: 0, pitch: Math.atan2(BOARD_Y - EYE, pos.z - BOARD_Z) };
+
+  /** The camera for where you stand: your eyes, or behind your head. */
+  private viewPose(): Pose {
+    const { pos, yaw, pitch } = this.me;
+    if (this.view === "first") return { pos: pos.clone().setY(pos.y + EYE), yaw, pitch };
+    const head = pos.clone().setY(pos.y + 1.5);
+    const look = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+    const at = head.addScaledVector(look, -BEHIND);
+    // the camera stays inside the room
+    at.x = THREE.MathUtils.clamp(at.x, -ROOM_W / 2 + 0.15, ROOM_W / 2 - 0.15);
+    at.z = THREE.MathUtils.clamp(at.z, WALL_Z + 0.2, ROOM_D / 2 - 0.15);
+    at.y = THREE.MathUtils.clamp(at.y, 0.3, ROOM_H - 0.15);
+    return { pos: at, yaw, pitch };
   }
 
   // ---------------------------------------------------------------- lifecycle
 
-  attach(host: HTMLElement, handlers: SpaceHandlers) {
+  attach(host: HTMLElement, handlers: SpaceHandlers, selfColor: string) {
     this.handlers = handlers;
     this.host = host;
     if (this.renderer.domElement.parentElement !== host) host.appendChild(this.renderer.domElement);
+    if (selfColor !== this.selfColor) {
+      // your colour is your connection's, so it can change from board to board
+      this.self.dispose();
+      this.self = new Avatar(selfColor);
+      this.selfColor = selfColor;
+      this.scene.add(this.self.group);
+    }
+    this.clearPeers();
     this.resize(host.clientWidth, host.clientHeight);
   }
   detach(host: HTMLElement) {
@@ -371,6 +423,7 @@ export class Space {
     this.handlers = null;
     this.host = null;
     this.pause();
+    this.clearPeers();
   }
 
   resize(w: number, h: number) {
@@ -381,34 +434,46 @@ export class Space {
     if (!this.raf) this.render();
   }
 
+  get cameraView(): CameraView {
+    return this.view;
+  }
+
   /** Board → 3D: start filling the screen with the wall board, then pull back into the room. */
   enter(onFirstFrame: () => void): Promise<void> {
-    this.setPose(this.fillPose());
+    this.setCam(this.fillPose());
+    this.placeSelf();
     this.render();
     onFirstFrame();
     this.resume();
-    return this.moveTo(this.saved ?? this.startPose()).then(() => {
+    const seq = ++this.seq;
+    return this.moveTo(this.viewPose()).then(() => {
+      if (seq !== this.seq) return;
       this.walking = true;
-      this.renderer.domElement.focus({ preventScroll: true });
+      this.announce();
+      this.lockMouse(); // still inside the key press or click that opened 3D, usually
     });
   }
 
   /** 3D → board: dolly into the wall board until it is the screen. */
   leave(): Promise<void> {
+    this.seq++;
     this.walking = false;
     this.keys.clear();
     this.vy = 0;
-    this.saved = { pos: this.pose.pos.clone().setY(EYE), yaw: this.pose.yaw, pitch: this.pose.pitch };
+    this.me.pos.y = 0;
+    this.unlockMouse();
     this.resume();
     return this.moveTo(this.fillPose());
   }
 
   /** Stops drawing: no frames, no CPU or GPU work, but everything kept for a quick return. */
   pause() {
+    this.seq++;
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.walking = false;
     this.keys.clear();
+    this.unlockMouse();
     this.anim?.done();
     this.anim = null;
     window.removeEventListener("keydown", this.onKeyDown);
@@ -428,6 +493,11 @@ export class Space {
   /** Releases models, textures and the renderer, so the memory is given back. */
   dispose() {
     this.pause();
+    this.clearPeers();
+    this.self.dispose();
+    this.renderer.domElement.removeEventListener("click", this.onClick);
+    document.removeEventListener("pointerlockchange", this.onLockChange);
+    document.removeEventListener("mousemove", this.onMouseMove);
     this.scene.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       o.geometry.dispose();
@@ -441,21 +511,62 @@ export class Space {
     this.renderer.domElement.remove();
   }
 
+  // ---------------------------------------------------------------- other people
+
+  /** Someone on this board is in the room: place them, or walk them towards where they are now. */
+  setPeer(sid: string, name: string, color: string, where: Where) {
+    const p = this.peers.get(sid);
+    if (p) {
+      p.target = where;
+      return;
+    }
+    const avatar = new Avatar(color, name);
+    avatar.group.position.set(where.x, where.y, where.z);
+    avatar.group.rotation.y = where.yaw;
+    this.scene.add(avatar.group);
+    this.peers.set(sid, { avatar, target: where, speed: 0 });
+  }
+  removePeer(sid: string) {
+    this.peers.get(sid)?.avatar.dispose();
+    this.peers.delete(sid);
+  }
+  clearPeers() {
+    for (const sid of [...this.peers.keys()]) this.removePeer(sid);
+  }
+
+  /** Tells the room where you are, moving or not (on arriving, or after a reconnect). */
+  announce() {
+    if (!this.walking) return;
+    this.sent = { at: performance.now(), where: this.where() };
+    this.handlers?.move(this.sent.where!);
+  }
+
+  private where(): Where {
+    const r = (v: number) => Math.round(v * 1000) / 1000;
+    return { x: r(this.me.pos.x), y: r(this.me.pos.y), z: r(this.me.pos.z), yaw: r(this.me.yaw) };
+  }
+
   // ---------------------------------------------------------------- moving
 
-  private setPose(p: Pose) {
-    this.pose = { pos: p.pos.clone(), yaw: p.yaw, pitch: p.pitch };
+  private setCam(p: Pose) {
+    this.cam = { pos: p.pos.clone(), yaw: p.yaw, pitch: p.pitch };
     this.camera.position.copy(p.pos);
     this.camera.rotation.set(p.pitch, p.yaw, 0);
   }
 
-  private moveTo(to: Pose): Promise<void> {
+  private placeSelf() {
+    this.self.group.position.copy(this.me.pos);
+    this.self.group.rotation.y = this.me.yaw;
+    this.self.group.visible = this.view === "third";
+  }
+
+  private moveTo(to: Pose, ms = MOVE_MS): Promise<void> {
     this.anim?.done();
     return new Promise((resolve) => {
-      const from = { pos: this.pose.pos.clone(), yaw: this.pose.yaw, pitch: this.pose.pitch };
+      const from = { pos: this.cam.pos.clone(), yaw: this.cam.yaw, pitch: this.cam.pitch };
       // turn the short way round
       const turn = Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw));
-      this.anim = { from, to: { ...to, yaw: from.yaw + turn }, t0: performance.now(), done: resolve };
+      this.anim = { from, to: { ...to, yaw: from.yaw + turn }, t0: performance.now(), done: resolve, ms };
     });
   }
 
@@ -463,52 +574,81 @@ export class Space {
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     if (this.anim) {
-      const { from, to, t0, done } = this.anim;
-      const t = Math.min(1, (now - t0) / MOVE_MS);
+      const { from, to, t0, ms, done } = this.anim;
+      const t = Math.min(1, (now - t0) / ms);
       const e = ease(t);
-      this.setPose({ pos: from.pos.clone().lerp(to.pos, e), yaw: from.yaw + (to.yaw - from.yaw) * e, pitch: from.pitch + (to.pitch - from.pitch) * e });
+      this.setCam({ pos: from.pos.clone().lerp(to.pos, e), yaw: from.yaw + (to.yaw - from.yaw) * e, pitch: from.pitch + (to.pitch - from.pitch) * e });
       if (t === 1) {
         this.anim = null;
         done();
       }
     } else if (this.walking) {
-      this.walk(dt);
+      this.walk(dt, now);
+      this.setCam(this.viewPose());
     }
+    this.placeSelf();
+    this.self.animate(dt, this.walking ? this.speed : 0, this.me.pos.y > 0.01);
+    this.stepPeers(dt);
     this.render();
     this.raf = requestAnimationFrame(this.tick);
   };
 
-  private walk(dt: number) {
+  private walk(dt: number, now: number) {
     const k = this.keys;
     const f = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
     const r = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
-    const p = this.pose.pos;
+    const p = this.me.pos;
+    const x0 = p.x;
+    const z0 = p.z;
     if (f || r) {
-      const speed = (k.has("shift") ? SPRINT : WALK) * dt * (f && r ? Math.SQRT1_2 : 1);
-      const sin = Math.sin(this.pose.yaw);
-      const cos = Math.cos(this.pose.yaw);
-      const dx = (-sin * f + cos * r) * speed;
-      const dz = (-cos * f - sin * r) * speed;
+      const step = (k.has("shift") ? SPRINT : WALK) * dt * (f && r ? Math.SQRT1_2 : 1);
+      const sin = Math.sin(this.me.yaw);
+      const cos = Math.cos(this.me.yaw);
+      const dx = (-sin * f + cos * r) * step;
+      const dz = (-cos * f - sin * r) * step;
       // one axis at a time, so you slide along walls and furniture
       if (this.free(p.x + dx, p.z)) p.x += dx;
       if (this.free(p.x, p.z + dz)) p.z += dz;
     }
-    const ground = EYE;
-    if (this.vy !== 0 || p.y > ground) {
+    this.speed = dt > 0 ? Math.hypot(p.x - x0, p.z - z0) / dt : 0;
+    if (this.vy !== 0 || p.y > 0) {
       this.vy -= GRAVITY * dt;
       p.y += this.vy * dt;
-      if (p.y <= ground) {
-        p.y = ground;
+      if (p.y <= 0) {
+        p.y = 0;
         this.vy = 0;
       }
     }
-    this.camera.position.copy(p);
-    this.camera.rotation.set(this.pose.pitch, this.pose.yaw, 0);
 
     const near = this.nearBoard();
     if (near !== this.wasNear) {
       this.wasNear = near;
       this.handlers?.near(near);
+    }
+
+    // nothing is sent while you stand still
+    const w = this.where();
+    const s = this.sent.where;
+    if (now - this.sent.at >= SEND_MS && (!s || s.x !== w.x || s.y !== w.y || s.z !== w.z || Math.abs(s.yaw - w.yaw) > 0.01)) {
+      this.sent = { at: now, where: w };
+      this.handlers?.move(w);
+    }
+  }
+
+  /** Others glide to where they last said they were, and walk while they get there. */
+  private stepPeers(dt: number) {
+    const k = 1 - Math.exp(-dt * 12);
+    for (const p of this.peers.values()) {
+      const g = p.avatar.group;
+      const { x, y, z, yaw } = p.target;
+      const moved = Math.hypot(x - g.position.x, z - g.position.z) * k;
+      g.position.x += (x - g.position.x) * k;
+      g.position.z += (z - g.position.z) * k;
+      g.position.y += (y - g.position.y) * Math.min(1, k * 2);
+      g.rotation.y += Math.atan2(Math.sin(yaw - g.rotation.y), Math.cos(yaw - g.rotation.y)) * k;
+      const v = dt > 0 ? moved / dt : 0;
+      p.speed += (v - p.speed) * Math.min(1, dt * 8);
+      p.avatar.animate(dt, p.speed < 0.15 ? 0 : p.speed, y > 0.05);
     }
   }
 
@@ -519,9 +659,25 @@ export class Space {
 
   /** Close to the board and facing it. */
   private nearBoard(): boolean {
-    const p = this.pose.pos;
+    const p = this.me.pos;
     const half = this.board.scale.x / 2;
-    return p.z - BOARD_Z < REACH && Math.abs(p.x) < half + 0.6 && Math.cos(this.pose.yaw) > 0.6;
+    return p.z - BOARD_Z < REACH && Math.abs(p.x) < half + 0.6 && Math.cos(this.me.yaw) > 0.6;
+  }
+
+  /** First person ↔ third person, with a short glide between the two cameras. */
+  private switchView() {
+    this.view = this.view === "first" ? "third" : "first";
+    try {
+      localStorage.setItem(VIEW_KEY, this.view);
+    } catch {
+      /* not remembered */
+    }
+    this.placeSelf();
+    this.walking = false;
+    const seq = this.seq;
+    void this.moveTo(this.viewPose(), 300).then(() => {
+      if (seq === this.seq) this.walking = true;
+    });
   }
 
   private render() {
@@ -537,9 +693,13 @@ export class Space {
       if (this.nearBoard()) this.handlers?.focusBoard();
       return;
     }
+    if (k === "v") {
+      if (!e.repeat) this.switchView();
+      return;
+    }
     if (k === " ") {
       e.preventDefault();
-      if (this.pose.pos.y <= EYE + 1e-3) this.vy = JUMP;
+      if (this.me.pos.y <= 1e-3) this.vy = JUMP;
       return;
     }
     if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "shift"].includes(k)) {
@@ -553,34 +713,39 @@ export class Space {
   };
   private onBlur = () => this.keys.clear();
 
-  // drag to look around; a click on the board opens it
-  private onPointerDown = (e: PointerEvent) => {
-    if (!this.walking || e.button !== 0) return;
-    this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
-    this.renderer.domElement.setPointerCapture(e.pointerId);
+  // the mouse looks around while it's captured, like in a shooter; Esc lets it go
+  private get locked() {
+    return document.pointerLockElement === this.renderer.domElement;
+  }
+  private lockMouse() {
+    if (this.locked || !this.walking) return;
+    try {
+      const p = this.renderer.domElement.requestPointerLock() as unknown as Promise<void> | undefined;
+      p?.catch?.(() => {}); // without a recent click or key press the browser says no; a click asks again
+    } catch {
+      /* same */
+    }
+  }
+  private unlockMouse() {
+    if (this.locked) document.exitPointerLock();
+  }
+  private onLockChange = () => {
+    this.keys.clear();
+    this.handlers?.locked(this.locked);
   };
-  private onPointerMove = (e: PointerEvent) => {
-    const d = this.drag;
-    if (!d || d.id !== e.pointerId || !this.walking) return;
-    const dx = e.clientX - d.x;
-    const dy = e.clientY - d.y;
-    if (!d.moved && Math.hypot(dx, dy) < 4) return;
-    d.moved = true;
-    d.x = e.clientX;
-    d.y = e.clientY;
-    this.pose.yaw += dx * 0.004;
-    this.pose.pitch = THREE.MathUtils.clamp(this.pose.pitch - dy * 0.004, -1.2, 1.2);
+  private onMouseMove = (e: MouseEvent) => {
+    if (!this.locked || !this.walking) return;
+    this.me.yaw -= e.movementX * LOOK;
+    const max = this.view === "first" ? 1.45 : 0.9;
+    this.me.pitch = THREE.MathUtils.clamp(this.me.pitch - e.movementY * LOOK, -max, max);
   };
-  private onPointerUp = (e: PointerEvent) => {
-    const d = this.drag;
-    if (!d || d.id !== e.pointerId) return;
-    this.drag = null;
-    if (d.moved || !this.walking || e.type === "pointercancel") return;
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
+  /** A click captures the mouse; once captured, clicking the board (under the crosshair) opens it. */
+  private onClick = () => {
+    if (!this.walking) return;
+    if (!this.locked) return this.lockMouse();
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     const hit = this.raycaster.intersectObject(this.board)[0];
-    if (hit && hit.distance < 7) this.handlers?.focusBoard();
+    if (hit && hit.distance < 4 + (this.view === "third" ? BEHIND : 0)) this.handlers?.focusBoard();
   };
 }
 

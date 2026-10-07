@@ -14,8 +14,9 @@ import { sameOrigin } from "./http.ts";
 import { logAction } from "./log.ts";
 
 // One room per board. The server is authoritative for notes (they're written
-// through the REST API and broadcast from here); presence, cursors and drag
-// locks live only in this process's memory; chat isn't kept at all.
+// through the REST API and broadcast from here); presence, cursors, avatars in
+// the 3D room and drag locks live only in this process's memory; chat isn't
+// kept at all.
 
 interface Client {
   sid: string;
@@ -24,8 +25,17 @@ interface Client {
   board: Board | null;
   joinedAt: number;
   lastCursor: number;
+  avatar: Avatar | null; // where they stand in the board's 3D room; null when on the flat board
+  lastAvatar: number;
   chatTimes: number[];
   alive: boolean;
+}
+
+interface Avatar {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
 }
 
 interface Lock {
@@ -48,6 +58,8 @@ const HISTORY_TIMEOUT_MS = 2_000;
 const HISTORY_CAP = 200;
 const CHAT_MAX = 500;
 const CURSOR_MIN_INTERVAL_MS = 40;
+const AVATAR_MIN_INTERVAL_MS = 60; // clients send ~10 a second, and nothing while standing still
+const AVATAR_RANGE = 100; // metres from the room's centre; anything further is junk
 
 const rooms = new Map<number, Set<Client>>();
 const clients = new Set<Client>();
@@ -237,6 +249,8 @@ function leave(c: Client): void {
   if (rooms.get(board.id)?.size === 0) rooms.delete(board.id);
   for (const [noteId, lock] of locks) if (lock.sid === c.sid) releaseLock(noteId, "left");
   for (const peer of rooms.get(board.id) ?? []) send(peer, { type: "cursor:leave", sid: c.sid });
+  if (c.avatar) for (const peer of rooms.get(board.id) ?? []) send(peer, { type: "avatar:leave", sid: c.sid });
+  c.avatar = null;
   // a handoff in flight to this newcomer is moot; one asked of this peer moves on
   for (const [to, h] of handoffs) {
     if (h.newcomer === c) {
@@ -272,7 +286,23 @@ function join(c: Client, boardId: unknown): void {
     const note = getNote(db, noteId);
     if (note && canSee(board, note, user.id)) send(c, lockMsg(noteId, lock, c));
   }
+  // whoever is already walking around the room
+  for (const peer of room(board.id)) if (peer !== c && peer.avatar) send(c, avatarMsg(peer, peer.avatar));
   if (board.kind === "channel") startHandoff(c);
+}
+
+const avatarMsg = (c: Client, a: Avatar) => ({ type: "avatar", sid: c.sid, name: displayName(c.user), ...a });
+
+function avatar(c: Client, board: Board, msg: Record<string, unknown>): void {
+  const now = Date.now();
+  if (now - c.lastAvatar < AVATAR_MIN_INTERVAL_MS) return;
+  const { x, y, z, yaw } = msg;
+  const ok = (v: unknown, lim: number): v is number => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= lim;
+  if (!ok(x, AVATAR_RANGE) || !ok(y, AVATAR_RANGE) || !ok(z, AVATAR_RANGE) || !ok(yaw, 1000)) return;
+  c.lastAvatar = now;
+  c.avatar = { x, y, z, yaw };
+  const out = avatarMsg(c, c.avatar);
+  for (const peer of rooms.get(board.id) ?? []) if (peer !== c) send(peer, out);
 }
 
 function handle(c: Client, msg: Record<string, unknown>): void {
@@ -289,6 +319,14 @@ function handle(c: Client, msg: Record<string, unknown>): void {
       c.lastCursor = now;
       const out = { type: "cursor", sid: c.sid, name: displayName(c.user), x: msg.x, y: msg.y };
       for (const peer of rooms.get(board.id) ?? []) if (peer !== c) send(peer, out);
+      return;
+    }
+    case "avatar":
+      return avatar(c, board, msg);
+    case "avatar:leave": {
+      if (!c.avatar) return;
+      c.avatar = null;
+      for (const peer of rooms.get(board.id) ?? []) if (peer !== c) send(peer, { type: "avatar:leave", sid: c.sid });
       return;
     }
     case "lock:acquire": {
@@ -350,7 +388,7 @@ export function attachRealtime(server: Server, database: DB): void {
     const user = sessionUser(db, req);
     if (!user) return reject(401, "Unauthorized");
     wss.handleUpgrade(req, socket, head, (ws) => {
-      const c: Client = { sid: randomBytes(6).toString("base64url"), ws, user, board: null, joinedAt: 0, lastCursor: 0, chatTimes: [], alive: true };
+      const c: Client = { sid: randomBytes(6).toString("base64url"), ws, user, board: null, joinedAt: 0, lastCursor: 0, avatar: null, lastAvatar: 0, chatTimes: [], alive: true };
       clients.add(c);
       ws.on("pong", () => (c.alive = true));
       ws.on("message", (data) => {
