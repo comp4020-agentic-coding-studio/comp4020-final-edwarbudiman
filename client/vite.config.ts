@@ -9,7 +9,8 @@ const target = process.env.API_URL ?? "http://localhost:8080";
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [react()],
-  build: { outDir: "dist", emptyOutDir: true },
+  // three.js (the 3D room) is one chunk of its own, loaded only when 3D opens
+  build: { outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 600 },
   server: {
     port: 5173,
     proxy: {

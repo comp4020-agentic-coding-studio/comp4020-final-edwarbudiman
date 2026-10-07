@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { api, ApiError, boardPath, COLORS, LABEL_MAX, LABELS_PER_NOTE } from "../api.ts";
 import type { BoardInfo, Color, Note } from "../api.ts";
@@ -7,6 +7,9 @@ import type { ServerMsg, Status } from "../socket.ts";
 import { Link, useSession } from "../router.tsx";
 import { Header } from "./Header.tsx";
 import { Chat } from "./Chat.tsx";
+import { SpaceLayer } from "../space/SpaceLayer.tsx";
+import type { Phase } from "../space/SpaceLayer.tsx";
+import { can3D, initialMode, rememberMode } from "../space/viewMode.ts";
 
 export const NOTE_W = 200;
 export const NOTE_H = 160;
@@ -132,6 +135,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const [following, setFollowing] = useState<string | null>(null); // a peer's sid
   const [chatOpen, setChatOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [phase, setPhase] = useState<Phase>("board"); // the flat board, the 3D home, or moving between them
+  const openIn3D = useRef(initialMode() === "3d");
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef(view);
@@ -169,6 +174,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   toolRef.current = tool;
   filterRef.current = filter;
   followingRef.current = following;
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
   /** Hidden by the label filter? Filtered-out notes can't be selected or edited. */
   const shown = (n: Note) => filterRef.current.size === 0 || n.labels.some((l) => filterRef.current.has(l.toLowerCase()));
@@ -227,6 +234,10 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         }
         setNotes(map);
         if (initial) placeInitialView(r.notes);
+        if (initial && openIn3D.current) {
+          openIn3D.current = false;
+          setPhase("to3d");
+        }
       } catch (err) {
         if (err instanceof ApiError && err.status === 403) {
           setGate({ visibility: String(err.data.visibility ?? "key"), message: err.message });
@@ -328,6 +339,19 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const stopFollowing = () => {
     if (followingRef.current) follow(null);
   };
+
+  // ---------------------------------------------------------------- board ↔ 3D
+
+  function toggleView() {
+    const p = phaseRef.current;
+    if (p === "board") {
+      if (!can3D()) return flash("3D needs WebGL and a mouse or trackpad, so this device stays on the board.");
+      stopFollowing();
+      setLabelOpen(false);
+      setFilterOpen(false);
+      setPhase("to3d");
+    } else if (p === "3d") setPhase("toBoard");
+  }
 
   // ---------------------------------------------------------------- live updates
 
@@ -816,6 +840,12 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       return;
     }
     if (isTyping(e.target) || editingRef.current !== null || helpOpen || accessOpen || labelOpen || filterOpen) return;
+    if ((e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      toggleView();
+      return;
+    }
+    if (phaseRef.current !== "board") return; // the 3D view has its own keys
     const onControl = e.target instanceof HTMLElement && !!e.target.closest("button, a");
     const sel = selectedRef.current;
     if (e.metaKey || e.ctrlKey) {
@@ -938,6 +968,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   }
 
   function onCopy(e: ClipboardEvent, cut: boolean) {
+    if (phaseRef.current !== "board") return;
     if (isTyping(e.target) || editingRef.current !== null || window.getSelection()?.toString()) return;
     const clip = clipFromSelection();
     if (!clip || !e.clipboardData) return;
@@ -949,6 +980,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   }
 
   function onPaste(e: ClipboardEvent) {
+    if (phaseRef.current !== "board") return;
     if (isTyping(e.target) || editingRef.current !== null || !e.clipboardData) return;
     if (pasteTimer.current) window.clearTimeout(pasteTimer.current);
     pasteTimer.current = null;
@@ -1229,6 +1261,20 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     void createNoteAt(w.x - NOTE_W / 2, w.y - NOTE_H / 2);
   }
 
+  // what the board on the 3D wall shows: exactly this view of the notes
+  const shot = useMemo(() => {
+    const el = viewportRef.current;
+    const list = Object.values(notes).sort((a, b) => a.z - b.z);
+    return {
+      notes: list,
+      faded: new Set(filter.size ? list.filter((n) => !shown(n)).map((n) => n.id) : []),
+      view,
+      width: el?.clientWidth ?? window.innerWidth,
+      height: el?.clientHeight ?? window.innerHeight,
+      me: me.username,
+    };
+  }, [notes, filter, view, me.username, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---------------------------------------------------------------- render
 
   if (loadError)
@@ -1277,6 +1323,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     return { left: n.x0 * view.s + view.ox, top: n.y0 * view.s + view.oy, width: (n.x1 - n.x0) * view.s, height: (n.y1 - n.y0) * view.s };
   };
   const grabbing = tool === "hand" || spaceHeld;
+  const flat = phase === "board"; // the board's own tools only show on the flat board
 
   return (
     <div className="board-page">
@@ -1347,6 +1394,27 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           )}
         </div>
 
+        {can3D() && (
+          <SpaceLayer
+            phase={phase}
+            shot={shot}
+            onEntered={() => {
+              setPhase("3d");
+              rememberMode("3d");
+            }}
+            onLeft={() => {
+              setPhase("board");
+              rememberMode("board");
+              viewportRef.current?.focus({ preventScroll: true });
+            }}
+            onFailed={() => {
+              setPhase("board");
+              flash("Couldn't start 3D in this browser, so you're on the board.");
+            }}
+            onFocusBoard={() => phaseRef.current === "3d" && setPhase("toBoard")}
+          />
+        )}
+
         {board?.kind === "channel" && (
           <Chat
             open={chatOpen}
@@ -1370,7 +1438,27 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
 
       <div className="island-row top-left">
         <MainMenu onHelp={() => setHelpOpen(true)} />
-        <div className="menu">
+        {can3D() && (
+          <button
+            className={`island tool view-toggle${flat ? "" : " on"}`}
+            aria-pressed={!flat}
+            disabled={phase === "to3d" || phase === "toBoard"}
+            onClick={toggleView}
+            title={flat ? "Step back into the room (M)" : "Back to the board (M)"}
+          >
+            {flat ? (
+              <svg viewBox="0 0 20 20" aria-hidden>
+                <path d="M3 8.5 10 3l7 5.5V16a.5.5 0 0 1-.5.5h-4V12h-5v4.5h-4A.5.5 0 0 1 3 16Z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 20 20" aria-hidden>
+                <path d="M3.5 4h13v10h-13Zm3 3h3v3h-3Zm5 0h3v2h-3Z" />
+              </svg>
+            )}
+            <span>{flat ? "Room" : "Board"}</span>
+          </button>
+        )}
+        {flat && <div className="menu">
           <button
             className={`island tool filter-button${filter.size ? " on" : ""}`}
             aria-expanded={filterOpen}
@@ -1391,7 +1479,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
               onClose={() => setFilterOpen(false)}
             />
           )}
-        </div>
+        </div>}
         {board && !board.isOwner && (
           <div className="island board-label">
             {board.kind === "user" && (
@@ -1404,7 +1492,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         )}
       </div>
 
-      {others.length > 0 && (
+      {flat && others.length > 0 && (
         <div className="island presence-row" role="group" aria-label="People on this board">
           {others.slice(0, 6).map((p) => (
             <button
@@ -1426,7 +1514,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         </div>
       )}
 
-      {followed && (
+      {flat && followed && (
         <div className="island follow-chip" style={{ "--peer": peerColor(followed.sid) } as CSSProperties} role="status">
           <span>
             Following <strong>{followed.name ?? "someone"}</strong>
@@ -1437,7 +1525,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         </div>
       )}
 
-      <div className="island tools" role="toolbar" aria-label="Tools">
+      {flat && <div className="island tools" role="toolbar" aria-label="Tools">
         <button className={`tool${tool === "hand" ? " on" : ""}`} aria-pressed={tool === "hand"} onClick={() => setTool("hand")} title="Hand: drag to move around (H, or hold Space)">
           <svg viewBox="0 0 20 20" aria-hidden>
             <path d="M7 10V4.5a1.25 1.25 0 0 1 2.5 0V9m0-.5V3.5a1.25 1.25 0 0 1 2.5 0V9m0-.5V4.5a1.25 1.25 0 0 1 2.5 0V12a5.5 5.5 0 0 1-5.5 5.5H9a5 5 0 0 1-4-2L3 12.6a1.3 1.3 0 0 1 2-1.6L7 13" />
@@ -1471,9 +1559,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
             />
           ))}
         </div>
-      </div>
+      </div>}
 
-      {selNotes.length > 0 && editing === null && (
+      {flat && selNotes.length > 0 && editing === null && (
         <div className="island selection" role="toolbar" aria-label="Selected notes">
           <span className="sel-count">{selNotes.length === 1 ? "1 note" : `${selNotes.length} notes`}</span>
           {selNotes.length === 1 && selNotes[0].canEdit && (
@@ -1498,7 +1586,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         </div>
       )}
 
-      <div className="island zoom" role="group" aria-label="Zoom">
+      {flat && <div className="island zoom" role="group" aria-label="Zoom">
         <button className="tool" onClick={() => zoomAt(1 / 1.2)} aria-label="Zoom out" title="Zoom out (−)">
           −
         </button>
@@ -1517,7 +1605,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
             Access
           </button>
         )}
-      </div>
+      </div>}
 
       {toast && (
         <div className="toast" role="status">
@@ -1595,6 +1683,8 @@ const SHORTCUTS: [string, string][] = [
   ["Zoom", `${mod} scroll, + and −, 0 resets`],
   ["Show all notes", "Shift 1"],
   ["Clear the selection", "Esc"],
+  ["Board ↔ 3D room", "M"],
+  ["In the room: walk, look, open the board", "W A S D, drag, E (Shift runs, Space jumps)"],
 ];
 
 function ShortcutsDialog({ onClose }: { onClose: () => void }) {

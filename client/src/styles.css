@@ -1295,3 +1295,61 @@ table.stats tr + tr {
     top: 116px;
   }
 }
+
+/* ================================================================ 3D room
+   Laid over the board's viewport; it fades in once its first frame matches
+   the flat board, and out again when the camera has dollied back into it. */
+
+.space-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+}
+.space-layer.shown {
+  opacity: 1;
+  pointer-events: auto;
+}
+.space-canvas {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.space-canvas:active {
+  cursor: grabbing;
+}
+.space-canvas:focus-visible {
+  outline: none;
+}
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 2.25rem;
+}
+.view-toggle span {
+  font-size: 0.85rem;
+}
+.space-hint {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.space-hint kbd + kbd {
+  margin-left: 2px;
+}
+.space-hint.near {
+  color: var(--ink);
+  box-shadow: var(--island-shadow), 0 0 0 2px var(--accent);
+}

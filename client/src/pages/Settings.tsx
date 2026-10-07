@@ -4,6 +4,7 @@ import { api, ApiError } from "../api.ts";
 import type { Me } from "../api.ts";
 import { Link, useSession } from "../router.tsx";
 import { Header } from "./Header.tsx";
+import { can3D, isSimple, setSimple } from "../space/viewMode.ts";
 
 export function Settings() {
   const { me, setMe } = useSession();
@@ -11,6 +12,7 @@ export function Settings() {
   const [email, setEmail] = useState(me.email ?? "");
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
+  const [simple, setSimpleState] = useState(isSimple);
 
   const report = (err: unknown) => setMsg({ ok: false, text: err instanceof ApiError ? err.message : "something went wrong" });
 
@@ -68,6 +70,29 @@ export function Settings() {
               <span className="hint">Your cursor shows as a nameless “someone”. Notes you write still show your name.</span>
             </span>
           </label>
+        </section>
+
+        <section className="card">
+          <h2>View</h2>
+          {can3D() ? (
+            <label className="switch-row">
+              <input
+                type="checkbox"
+                checked={simple}
+                onChange={() => {
+                  setSimple(!simple);
+                  setSimpleState(!simple);
+                }}
+              />
+              <span>
+                <strong>Simple mode</strong>
+                <br />
+                <span className="hint">Always open on the flat board. You can still step into the 3D room with M.</span>
+              </span>
+            </label>
+          ) : (
+            <p className="muted">This device only gets the flat board: the 3D room needs WebGL and a mouse or trackpad.</p>
+          )}
         </section>
 
         <section className="card">
