@@ -7,7 +7,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { User } from "./auth.ts";
 import { getUser, sessionUser } from "./auth.ts";
 import type { Board, NoteRow } from "./boards.ts";
-import { canEnter, canMove, canSee, getBoard, getNote, hooks, noteOut } from "./boards.ts";
+import { canEnter, canMove, canSee, getBoard, getNote, hooks, markSeen, noteOut } from "./boards.ts";
 import { config } from "./config.ts";
 import type { DB } from "./db.ts";
 import { sameOrigin } from "./http.ts";
@@ -263,6 +263,7 @@ function leave(c: Client): void {
     }
   }
   c.board = null;
+  markSeen(db, board.id, c.user.id);
   presence(board.id);
 }
 
@@ -426,6 +427,7 @@ export function attachRealtime(server: Server, database: DB): void {
       if (canSee(board, note, c.user.id)) send(c, { type: "note:upsert", note: noteOut(board, note, c.user.id) });
       else send(c, { type: "note:delete", id: note.id });
     }
+    if (note.version === 1) activity(board, note);
   };
   hooks.noteDeleted = (board, note) => {
     const lock = locks.get(note.id);
@@ -436,6 +438,23 @@ export function attachRealtime(server: Server, database: DB): void {
     toViewers(board, note, () => ({ type: "note:delete", id: note.id }));
   };
   hooks.lockHolder = (noteId) => locks.get(noteId)?.userId ?? null;
+}
+
+/**
+ * A new note: everyone who has this board on their sidebar and isn't looking
+ * at it gets a nudge to refresh their unread counts. Every open tab has a
+ * socket (it's in some board's room), so this reaches all of them.
+ */
+function activity(board: Board, note: NoteRow): void {
+  const ids = (db.prepare("SELECT user_id AS id FROM board_seen WHERE board_id = ?").all(board.id) as { id: number }[]).map((r) => r.id);
+  const watching = new Set(ids);
+  watching.delete(note.author_id);
+  if (watching.size === 0) return;
+  const msg = { type: "activity", kind: board.kind, slug: board.slug };
+  for (const c of clients) {
+    if (!watching.has(c.user.id) || c.board?.id === board.id) continue;
+    if (canSee(board, note, c.user.id)) send(c, msg);
+  }
 }
 
 /** A user's settings changed (the anonymous toggle): refresh their live presence. */

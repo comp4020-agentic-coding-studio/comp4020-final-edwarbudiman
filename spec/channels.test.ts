@@ -60,4 +60,24 @@ describe("channels", () => {
     // only the creator manages the lists
     expect((await invited.call("PUT", `/api/channels/${slug}/access`, { allow: [] })).status).toBe(403);
   });
+
+  it("lets the creator close an open channel with a key later, without touching who's already in", async () => {
+    const owner = await signup("o");
+    const early = await signup("e");
+    const late = await signup("l");
+    const slug = (await owner.call("POST", "/api/channels", { name: name("later") })).body.board.slug;
+    expect((await early.call("GET", `/api/boards/channel/${slug}`)).status).toBe(200); // walks in while it's open
+
+    const key = secret(`key-${Math.random().toString(36).slice(2)}`);
+    expect((await owner.call("PUT", `/api/channels/${slug}/access`, { visibility: "key" })).status).toBe(400); // a key is required
+    const closed = await owner.call("PUT", `/api/channels/${slug}/access`, { visibility: "key", key });
+    expect(closed.status).toBe(200);
+    expect(closed.body.board.visibility).toBe("key");
+
+    expect((await early.call("GET", `/api/boards/channel/${slug}`)).status).toBe(200);
+    expect((await late.call("GET", `/api/boards/channel/${slug}`)).status).toBe(403);
+    // saving the lists again keeps the key
+    expect((await owner.call("PUT", `/api/channels/${slug}/access`, { deny: [] })).status).toBe(200);
+    expect((await late.call("POST", `/api/channels/${slug}/join`, { key })).status).toBe(200);
+  });
 });

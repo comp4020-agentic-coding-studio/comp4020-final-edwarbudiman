@@ -22,10 +22,12 @@ export function usePath(): string {
   return path;
 }
 
-export function Link({ to, children, className, title }: { to: string; children: ReactNode; className?: string; title?: string }) {
+export function Link(props: { to: string; children: ReactNode; className?: string; title?: string; onNavigate?: () => void }) {
+  const { to, children, className, title } = props;
   const onClick = (e: MouseEvent) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault();
+    props.onNavigate?.();
     navigate(to);
   };
   return (

@@ -69,6 +69,23 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE notes ADD COLUMN labels TEXT NOT NULL DEFAULT '[]';
   `,
+  // 4: the sidebar. When each person last looked at each board, so it can show
+  // how many notes are new since; a channel's one-line description.
+  // Everyone starts "caught up" on the channels they're in and their own board.
+  `
+  ALTER TABLE boards ADD COLUMN description TEXT NOT NULL DEFAULT '';
+  CREATE TABLE board_seen (
+    board_id    INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    seen_at     INTEGER NOT NULL,
+    PRIMARY KEY (user_id, board_id)
+  );
+  INSERT INTO board_seen (board_id, user_id, seen_at)
+    SELECT board_id, user_id, CAST(strftime('%s', 'now') AS INTEGER) * 1000 FROM board_members;
+  INSERT OR IGNORE INTO board_seen (board_id, user_id, seen_at)
+    SELECT id, owner_id, CAST(strftime('%s', 'now') AS INTEGER) * 1000 FROM boards WHERE kind = 'user';
+  CREATE INDEX notes_board_created ON notes(board_id, created_at);
+  `,
 ];
 
 export function openDb(dataDir: string): DB {

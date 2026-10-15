@@ -82,14 +82,21 @@ export function Chat(props: {
 
   return (
     <aside className={`chat${props.open ? " open" : ""}`} aria-label="Channel chat">
-      <button className="chat-toggle" onClick={props.onToggle} aria-expanded={props.open}>
-        Chat{unread > 0 && !props.open ? ` (${unread})` : ""}
+      <button className={`island tool chat-toggle${props.open ? " on" : ""}`} onClick={props.onToggle} aria-expanded={props.open} title="Chat with whoever's here">
+        <svg viewBox="0 0 20 20" aria-hidden>
+          <path d="M4 4.5h12a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H9l-3.5 3v-3H4a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5Z" />
+        </svg>
+        <span>Chat</span>
+        {unread > 0 && !props.open && <span className="unread">{unread}</span>}
       </button>
-      <div className="chat-body">
-        <header>
+      <div className="island chat-body">
+        <header className="dialog-head">
           <h2>Chat</h2>
-          <p className="hint">Not stored anywhere. A message lasts as long as someone who saw it is still here.</p>
+          <button type="button" className="tool" onClick={props.onToggle} aria-label="Close chat">
+            ×
+          </button>
         </header>
+        <p className="pop-note">Not stored anywhere. A message lasts as long as someone who saw it is still here.</p>
         <ol ref={listRef} className="chat-lines" aria-live="polite">
           {waiting && <li className="muted small">Asking who's here for what they've seen…</li>}
           {!waiting && lines.length === 0 && <li className="muted small">Nothing said yet — or everyone who saw it has left.</li>}

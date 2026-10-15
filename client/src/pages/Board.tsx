@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { api, ApiError, boardPath, COLORS, LABEL_MAX, LABELS_PER_NOTE } from "../api.ts";
+import { api, ApiError, COLORS, LABEL_MAX, LABELS_PER_NOTE } from "../api.ts";
 import type { BoardInfo, Color, Note } from "../api.ts";
 import { LiveSocket } from "../socket.ts";
 import type { ServerMsg, Status } from "../socket.ts";
@@ -10,6 +10,8 @@ import { Chat } from "./Chat.tsx";
 import { SpaceLayer } from "../space/SpaceLayer.tsx";
 import type { Phase, RoomLink } from "../space/SpaceLayer.tsx";
 import { can3D, initialMode, rememberMode } from "../space/viewMode.ts";
+import { ChannelSettingsDialog, JoinCard, MissingChannel } from "./Channels.tsx";
+import { openCreateChannel, refreshSidebar } from "../shell.ts";
 
 export const NOTE_W = 200;
 export const NOTE_H = 160;
@@ -137,6 +139,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const [accessOpen, setAccessOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("board"); // the flat board, the 3D home, or moving between them
   const openIn3D = useRef(initialMode() === "3d");
+  const [missing, setMissing] = useState(false);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef(view);
@@ -227,6 +230,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         const r = await api<{ board: BoardInfo; notes: Note[] }>("GET", `/api/boards/${kind}/${encodeURIComponent(slug)}`);
         setBoard(r.board);
         setGate(null);
+        if (initial) refreshSidebar(); // opening it just caught you up
         const map: Record<number, Note> = {};
         for (const n of r.notes) map[n.id] = n;
         // notes I'm dragging keep the position under my pointer
@@ -242,6 +246,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       } catch (err) {
         if (err instanceof ApiError && err.status === 403) {
           setGate({ visibility: String(err.data.visibility ?? "key"), message: err.message });
+        } else if (err instanceof ApiError && err.status === 404 && kind === "channel") {
+          setMissing(true);
         } else if (err instanceof ApiError && err.status === 404) {
           setLoadError(kind === "user" ? `There's no user called “${slug}”.` : `There's no channel called #${slug}.`);
         } else if (initial) {
@@ -348,8 +354,13 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     if (p === "board") {
       if (!can3D()) return flash("3D needs WebGL and a mouse or trackpad, so this device stays on the board.");
       stopFollowing();
+      setEditing(null);
+      select([]);
       setLabelOpen(false);
       setFilterOpen(false);
+      setHelpOpen(false);
+      setAccessOpen(false);
+      setChatOpen(false);
       setPhase("to3d");
     } else if (p === "3d") setPhase("toBoard");
   }
@@ -449,6 +460,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         flash(`${(m.holder as string | null) ?? "Someone"} is moving that note right now.`);
         return;
       }
+      case "activity":
+        refreshSidebar();
+        return;
       case "error":
         if (typeof m.message === "string") flash(m.message);
         return;
@@ -1300,11 +1314,54 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       </>
     );
 
-  if (gate) return <JoinGate slug={slug} gate={gate} onJoined={() => void load(true)} />;
+  const titleChip = board ? (
+    board.kind === "channel" && board.isOwner ? (
+      <button className="island tool board-title" onClick={() => setAccessOpen(true)} title={`#${board.slug} settings`}>
+        <span className="switcher-title">
+          <span className="hash">#</span>
+          {board.slug}
+        </span>
+        <svg viewBox="0 0 20 20" aria-hidden>
+          <path d="M10 7.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z M10 2.8v2 M10 15.2v2 M2.8 10h2 M15.2 10h2 M4.9 4.9l1.4 1.4 M13.7 13.7l1.4 1.4 M4.9 15.1l1.4-1.4 M13.7 6.3l1.4-1.4" />
+        </svg>
+      </button>
+    ) : (
+      <div className="island board-title" title={board.description || undefined}>
+        <span className="switcher-title">
+          {board.kind === "channel" && <span className="hash">#</span>}
+          {boardTitle(board)}
+        </span>
+      </div>
+    )
+  ) : null;
+
+  if (missing)
+    return (
+      <div className="board-page">
+        <div className="viewport" />
+        <MissingChannel slug={slug} onCreate={() => openCreateChannel(slug)} />
+        <div className="island-row top-right">
+          <MainMenu onHelp={() => setHelpOpen(true)} />
+        </div>
+        {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
+      </div>
+    );
+
+  if (gate)
+    return (
+      <div className="board-page">
+        <div className="viewport" />
+        <JoinCard slug={slug} gate={gate} onJoined={() => void load(true)} />
+        <div className="island-row top-right">
+          <MainMenu onHelp={() => setHelpOpen(true)} />
+        </div>
+        {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
+      </div>
+    );
 
   const sorted = Object.values(notes).sort((a, b) => a.z - b.z);
   const selNotes = [...selected].map((id) => notes[id]).filter((n): n is Note => !!n);
-  const title = !board ? "" : board.kind === "channel" ? `#${board.slug}` : board.isOwner ? "Your board" : `${board.owner}'s board`;
+  const title = !board ? "" : board.kind === "channel" ? `#${board.slug}` : boardTitle(board);
   const others = peers.filter((p) => p.sid !== mySid);
   const followed = following ? peers.find((p) => p.sid === following) : undefined;
   // every label on the board, as first written, with how many notes carry it
@@ -1391,7 +1448,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           ))}
           {board && sorted.length === 0 && (
             <div className="empty-hint">
-              <p className="empty-title">{board.isOwner ? "Your board is empty" : board.kind === "user" ? `${board.owner}'s board is empty` : "No notes yet"}</p>
+              <p className="empty-title">{board.kind === "channel" ? "No notes yet" : board.isOwner ? "Your board is empty" : `${board.owner}'s board is empty`}</p>
               <p>
                 Double-click anywhere to add a note, or press <kbd>N</kbd>.
               </p>
@@ -1492,37 +1549,30 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
             />
           )}
         </div>}
-        {board && !board.isOwner && (
-          <div className="island board-label">
-            {board.kind === "user" && (
-              <Link to={boardPath("user", me.username, me.username)} className="back-link" title="Back to your board">
-                ←
-              </Link>
-            )}
-            <span>{title}</span>
-          </div>
-        )}
+        {flat && titleChip}
       </div>
 
       {flat && others.length > 0 && (
-        <div className="island presence-row" role="group" aria-label="People on this board">
-          {others.slice(0, 6).map((p) => (
-            <button
-              key={p.sid}
-              className={`avatar-btn${following === p.sid ? " on" : ""}`}
-              style={{ "--peer": peerColor(p.sid) } as CSSProperties}
-              aria-pressed={following === p.sid}
-              title={following === p.sid ? `Stop following ${p.name ?? "them"}` : `${p.name ?? "Someone (anonymous)"}: click to follow`}
-              onClick={() => follow(p.sid)}
-            >
-              {p.name ? p.name[0].toUpperCase() : "?"}
-            </button>
-          ))}
-          {others.length > 6 && (
-            <span className="avatar-more" title={others.slice(6).map((p) => p.name ?? "Someone").join(", ")}>
-              +{others.length - 6}
-            </span>
-          )}
+        <div className="island-row top-right">
+          <div className="island presence-row" role="group" aria-label="People on this board">
+            {others.slice(0, 6).map((p) => (
+              <button
+                key={p.sid}
+                className={`avatar-btn${following === p.sid ? " on" : ""}`}
+                style={{ "--peer": peerColor(p.sid) } as CSSProperties}
+                aria-pressed={following === p.sid}
+                title={following === p.sid ? `Stop following ${p.name ?? "them"}` : `${p.name ?? "Someone (anonymous)"}: click to follow`}
+                onClick={() => follow(p.sid)}
+              >
+                {p.name ? p.name[0].toUpperCase() : "?"}
+              </button>
+            ))}
+            {others.length > 6 && (
+              <span className="avatar-more" title={others.slice(6).map((p) => p.name ?? "Someone").join(", ")}>
+                +{others.length - 6}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -1625,21 +1675,21 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         </div>
       )}
       {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
-      {accessOpen && board && <AccessDialog board={board} onClose={() => setAccessOpen(false)} onSaved={(b) => setBoard(b)} />}
+      {accessOpen && board && <ChannelSettingsDialog board={board} onClose={() => setAccessOpen(false)} onSaved={(b) => setBoard(b)} />}
     </div>
   );
+}
+
+/** The title chip: channels show their slug next to a #. */
+function boardTitle(board: BoardInfo): string {
+  return board.kind === "channel" ? board.slug : board.isOwner ? "Your board" : `${board.owner}'s board`;
 }
 
 // ---------------------------------------------------------------- menu & help
 
 function MainMenu({ onHelp }: { onHelp: () => void }) {
-  const { me, setMe } = useSession();
+  const { me } = useSession();
   const [open, setOpen] = useState(false);
-  async function logout() {
-    await api("POST", "/api/logout").catch(() => {});
-    history.replaceState(null, "", "/");
-    setMe(null);
-  }
   return (
     <div className="menu">
       <button className="island tool menu-button" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((o) => !o)} title="Menu">
@@ -1651,7 +1701,7 @@ function MainMenu({ onHelp }: { onHelp: () => void }) {
       {open && (
         <>
           <div className="menu-backdrop" onPointerDown={() => setOpen(false)} />
-          <div className="island menu-pop" role="menu" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
+          <div className="island menu-pop end" role="menu" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
             <p className="menu-who">
               Signed in as <strong>{me.username}</strong>
             </p>
@@ -1668,9 +1718,6 @@ function MainMenu({ onHelp }: { onHelp: () => void }) {
             <Link to="/settings" className="menu-item">
               Settings
             </Link>
-            <button role="menuitem" onClick={logout}>
-              Log out
-            </button>
           </div>
         </>
       )}
@@ -1940,100 +1987,6 @@ function NoteCard(props: {
         </footer>
       )}
       {heldByOther && <div className="held-by">{lock!.holder} is moving this</div>}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- channel gates
-
-function JoinGate({ slug, gate, onJoined }: { slug: string; gate: { visibility: string; message: string }; onJoined: () => void }) {
-  const [key, setKey] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      await api("POST", `/api/channels/${encodeURIComponent(slug)}/join`, { key });
-      onJoined();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "couldn't join");
-    }
-  }
-  return (
-    <>
-      <Header />
-      <main className="page narrow">
-        <h1>#{slug}</h1>
-        {gate.visibility === "key" ? (
-          <form className="card" onSubmit={submit}>
-            <p>This channel is private. Enter its key to join; you'll only need it once.</p>
-            <label>
-              Key
-              <input type="password" value={key} onChange={(e) => setKey(e.target.value)} autoFocus autoComplete="off" required />
-            </label>
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-            <button className="primary" type="submit">
-              Join
-            </button>
-          </form>
-        ) : (
-          <p className="card">{gate.visibility === "list" ? "This channel is invite-only. Ask the person who made it to add your username." : gate.message}</p>
-        )}
-        <p>
-          <Link to="/">Back home</Link>
-        </p>
-      </main>
-    </>
-  );
-}
-
-function AccessDialog({ board, onClose, onSaved }: { board: BoardInfo; onClose: () => void; onSaved: (b: BoardInfo) => void }) {
-  const [allow, setAllow] = useState((board.access?.allow ?? []).join(", "));
-  const [deny, setDeny] = useState((board.access?.deny ?? []).join(", "));
-  const [error, setError] = useState<string | null>(null);
-  const names = (s: string) =>
-    s
-      .split(/[\s,]+/)
-      .map((x) => x.trim())
-      .filter(Boolean);
-  async function save(e: FormEvent) {
-    e.preventDefault();
-    try {
-      const r = await api<{ board: BoardInfo }>("PUT", `/api/channels/${board.slug}/access`, { allow: names(allow), deny: names(deny) });
-      onSaved(r.board);
-      onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "couldn't save");
-    }
-  }
-  return (
-    <div className="dialog-backdrop" onClick={onClose}>
-      <form className="card dialog" onSubmit={save} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Who can join">
-        <h2>Who can join #{board.slug}</h2>
-        {board.visibility === "list" && (
-          <label>
-            Allowed usernames
-            <input value={allow} onChange={(e) => setAllow(e.target.value)} autoFocus />
-          </label>
-        )}
-        <label>
-          Kept out <span className="hint">(removed now and can't rejoin)</span>
-          <input value={deny} onChange={(e) => setDeny(e.target.value)} />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <div className="row">
-          <button className="primary" type="submit">
-            Save
-          </button>
-          <button className="secondary" type="button" onClick={onClose}>
-            Cancel
-          </button>
-        </div>
-      </form>
     </div>
   );
 }

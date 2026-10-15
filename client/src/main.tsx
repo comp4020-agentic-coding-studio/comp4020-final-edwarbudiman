@@ -5,6 +5,7 @@ import { api, boardPath, setOnUnauthorized } from "./api.ts";
 import type { Me } from "./api.ts";
 import { AuthPage } from "./pages/Auth.tsx";
 import { BoardPage } from "./pages/Board.tsx";
+import { Sidebar } from "./pages/Channels.tsx";
 import { Settings } from "./pages/Settings.tsx";
 import { Stats } from "./pages/Stats.tsx";
 import { Link, SessionContext, navigate, usePath } from "./router.tsx";
@@ -52,11 +53,18 @@ function App() {
 
   let page: ReactNode;
   let m: RegExpMatchArray | null;
-  if (path === "/") page = <BoardPage key={`u/${me.username}`} kind="user" slug={me.username} />;
-  else if ((m = path.match(/^\/c\/([^/]+)\/?$/))) page = <BoardPage key={`c/${m[1]}`} kind="channel" slug={decodeURIComponent(m[1])} />;
+  // boards sit next to the sidebar; the other pages have their own header
+  const withSidebar = (board: ReactNode) => (
+    <div className="shell">
+      <Sidebar />
+      <div className="shell-main">{board}</div>
+    </div>
+  );
+  if (path === "/") page = withSidebar(<BoardPage key={`u/${me.username}`} kind="user" slug={me.username} />);
+  else if ((m = path.match(/^\/c\/([^/]+)\/?$/))) page = withSidebar(<BoardPage key={`c/${m[1]}`} kind="channel" slug={decodeURIComponent(m[1])} />);
   else if (path === "/settings") page = <Settings />;
   else if (path === "/stats") page = <Stats />;
-  else if ((m = path.match(/^\/([^/]+)\/?$/)) && !PAGES.has(m[1])) page = <BoardPage key={`u/${m[1]}`} kind="user" slug={decodeURIComponent(m[1])} />;
+  else if ((m = path.match(/^\/([^/]+)\/?$/)) && !PAGES.has(m[1])) page = withSidebar(<BoardPage key={`u/${m[1]}`} kind="user" slug={decodeURIComponent(m[1])} />);
   else
     page = (
       <div className="page">
