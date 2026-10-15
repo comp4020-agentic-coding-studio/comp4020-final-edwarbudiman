@@ -65,3 +65,22 @@ Standard workflows:
 - **Before submission**: Run preflight checks
 - **Deployment**: Run ship workflow with confirmation
 - **Setup issues**: Run doctor diagnostics
+
+## Branches and worktrees
+
+The root checkout always stays on `main`. It is where features get integrated
+and tested. Each feature lives in its own linked worktree:
+
+- Path `.claude/worktrees/<name>`, branch `feat/<name>`, one Herdr workspace per
+  worktree, labelled with the branch name and with its cwd set to the worktree.
+- To start a feature: `git worktree add .claude/worktrees/<name> -b feat/<name> main`,
+  then `herdr workspace create --cwd <worktree path> --label feat/<name> --no-focus`.
+- Commit feature work inside its worktree, never in root.
+- Commit shared changes (harness, `.gitignore`, idea docs, scripts) on `main` in
+  root, then run `scripts/sync-worktrees.sh` to merge `main` into every worktree.
+  The script skips worktrees with uncommitted changes and stops on merge
+  conflicts. Commit the WIP or resolve the conflict in that worktree, then run
+  it again.
+- When a feature is ready, merge it into `main` from root (`git merge feat/<name>`),
+  test it there, then run the sync script so the other features pick it up.
+- Use merges to bring `main` into a feature branch, not rebases.
