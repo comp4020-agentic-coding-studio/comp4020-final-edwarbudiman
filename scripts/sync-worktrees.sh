@@ -35,7 +35,8 @@ while IFS= read -r line; do
   echo
   echo "== $branch ($wt_path) =="
 
-  if [[ -n "$(git -C "$wt_path" status --porcelain)" ]]; then
+  # Untracked files are fine: git merge refuses to overwrite them on its own.
+  if [[ -n "$(git -C "$wt_path" status --porcelain --untracked-files=no)" ]]; then
     echo "skipped: uncommitted changes in $wt_path" >&2
     failed+=("$branch (uncommitted changes)")
     continue
