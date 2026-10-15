@@ -82,6 +82,8 @@ export function createUserBoard(db: DB, userId: number, username: string): void 
   db.prepare(
     "INSERT OR IGNORE INTO boards (kind, owner_id, slug, name, visibility, created_at) VALUES ('user', ?, ?, ?, 'public', ?)",
   ).run(userId, username, `${username}'s board`, Date.now());
+  // your own board starts on your sidebar, caught up
+  db.prepare("INSERT OR IGNORE INTO board_seen (board_id, user_id, seen_at) SELECT id, ?, ? FROM boards WHERE kind = 'user' AND slug = ?").run(userId, Date.now(), username);
 }
 
 // ---------------------------------------------------------------- sessions
@@ -291,6 +293,13 @@ export async function seedDemo(db: DB): Promise<void> {
   // a shared channel so there's somewhere to meet out of the box
   const demo1 = findUserByName(db, "demo1")!;
   db.prepare(
-    "INSERT OR IGNORE INTO boards (kind, owner_id, slug, name, visibility, created_at) VALUES ('channel', ?, 'lobby', 'Lobby', 'public', ?)",
+    "INSERT OR IGNORE INTO boards (kind, owner_id, slug, name, visibility, description, created_at) VALUES ('channel', ?, 'lobby', 'Lobby', 'public', 'Say hi. Everyone starts here.', ?)",
   ).run(demo1.id, Date.now());
+  // both demo accounts are in it, so their sidebars aren't empty
+  const lobby = db.prepare("SELECT id FROM boards WHERE kind = 'channel' AND slug = 'lobby'").get() as { id: number };
+  for (const username of ["demo1", "demo2"]) {
+    const u = findUserByName(db, username)!;
+    db.prepare("INSERT OR IGNORE INTO board_members (board_id, user_id) VALUES (?, ?)").run(lobby.id, u.id);
+    db.prepare("INSERT OR IGNORE INTO board_seen (board_id, user_id, seen_at) VALUES (?, ?, ?)").run(lobby.id, u.id, Date.now());
+  }
 }

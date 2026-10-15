@@ -45,6 +45,7 @@ export interface BoardInfo {
   owner: string | null;
   isOwner: boolean;
   visibility: "public" | "key" | "list";
+  description: string;
   access?: { allow: string[]; deny: string[] };
 }
 
@@ -55,6 +56,24 @@ export interface ChannelSummary {
   owner: string;
   member: boolean;
   members: number;
+}
+
+/** A row in the sidebar: a channel you're in, or a person whose board you've visited. */
+export interface SidebarChannel {
+  slug: string;
+  name: string;
+  description: string;
+  visibility: "public" | "key" | "list";
+  owner: string;
+  isOwner: boolean;
+  members: number;
+  unread: number;
+  activeAt: number; // newest note, or when it was made
+}
+export interface SidebarPerson {
+  username: string;
+  unread: number;
+  activeAt: number;
 }
 
 export class ApiError extends Error {

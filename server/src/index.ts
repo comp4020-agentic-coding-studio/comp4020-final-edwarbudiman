@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { changePassword, login, logout, publicUser, requireUser, seedDemo, signup, updateMe } from "./auth.ts";
-import { channelBoard, createChannel, createNote, deleteNote, directory, joinChannel, listChannels, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
+import { channelBoard, createChannel, createNote, deleteNote, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
 import { config } from "./config.ts";
 import { openDb } from "./db.ts";
 import { HttpError, readJson, sameOrigin, sendJson } from "./http.ts";
@@ -67,7 +67,19 @@ route("POST", /^\/api\/channels\/([^/]+)\/join$/, async (req, res, [slug]) => {
 });
 route("PUT", /^\/api\/channels\/([^/]+)\/access$/, async (req, res, [slug]) => {
   const user = requireUser(db, req);
-  sendJson(res, 200, { board: updateAccess(db, user, decodeURIComponent(slug), await readJson(req)) });
+  sendJson(res, 200, { board: await updateAccess(db, user, decodeURIComponent(slug), await readJson(req)) });
+});
+route("POST", /^\/api\/channels\/([^/]+)\/leave$/, (req, res, [slug]) => {
+  leaveChannel(db, requireUser(db, req), decodeURIComponent(slug));
+  sendJson(res, 200, { ok: true });
+});
+
+// ---------------------------------------------------------------- sidebar
+
+route("GET", /^\/api\/sidebar$/, (req, res) => sendJson(res, 200, sidebar(db, requireUser(db, req))));
+route("DELETE", /^\/api\/sidebar\/people\/([^/]+)$/, (req, res, [name]) => {
+  forgetPerson(db, requireUser(db, req), decodeURIComponent(name));
+  sendJson(res, 200, { ok: true });
 });
 
 // ---------------------------------------------------------------- live view (C10-02)

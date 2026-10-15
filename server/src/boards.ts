@@ -16,6 +16,7 @@ export interface Board {
   name: string;
   visibility: "public" | "key" | "list";
   key_hash: string | null;
+  description: string;
   created_at: number;
 }
 
@@ -40,6 +41,7 @@ export const COLORS = ["yellow", "pink", "blue", "green", "orange", "purple"] as
 export const NOTE_MAX = 280;
 export const LABEL_MAX = 24;
 export const LABELS_PER_NOTE = 5;
+export const DESCRIPTION_MAX = 140;
 
 /**
  * Wired up by the real-time layer (realtime.ts): REST writes are broadcast to
@@ -51,7 +53,7 @@ export const hooks = {
   lockHolder: (_noteId: number): number | null => null,
 };
 
-const BOARD_COLS = "b.id, b.kind, b.owner_id, u.username AS owner_name, b.slug, b.name, b.visibility, b.key_hash, b.created_at";
+const BOARD_COLS = "b.id, b.kind, b.owner_id, u.username AS owner_name, b.slug, b.name, b.visibility, b.key_hash, b.description, b.created_at";
 const NOTE_COLS = "n.id, n.board_id, n.author_id, u.username AS author, n.text, n.color, n.x, n.y, n.z, n.visibility, n.labels, n.version, n.created_at, n.updated_at";
 
 export function getBoard(db: DB, id: number): Board | undefined {
@@ -136,6 +138,7 @@ export function boardOut(db: DB, board: Board, user: User) {
     owner: board.owner_name,
     isOwner,
     visibility: board.visibility,
+    description: board.description,
     // the key itself is never stored in the clear, nor its hash ever sent
     ...(board.kind === "channel" && isOwner ? { access: accessLists(db, board.id) } : {}),
   };
@@ -151,6 +154,7 @@ function listNotes(db: DB, board: Board, user: User) {
 export function userBoard(db: DB, user: User, username: string) {
   const board = boardBySlug(db, "user", username.toLowerCase());
   if (!board) throw new HttpError(404, "no such user");
+  markSeen(db, board.id, user.id);
   return { board: boardOut(db, board, user), notes: listNotes(db, board, user) };
 }
 
@@ -165,6 +169,7 @@ export function channelBoard(db: DB, user: User, slug: string) {
       throw new HttpError(403, "you're not a member of this channel", { needsKey: board.visibility === "key", visibility: board.visibility });
     }
   }
+  markSeen(db, board.id, user.id);
   return { board: boardOut(db, board, user), notes: listNotes(db, board, user) };
 }
 
@@ -379,6 +384,7 @@ function setAccess(db: DB, boardId: number, allow: string[], deny: string[]): vo
 export async function createChannel(db: DB, user: User, body: Record<string, unknown>) {
   const name = str(body, "name", { min: 1, max: 40 })!.trim();
   if (!name) throw new HttpError(400, "name is required");
+  const description = (str(body, "description", { max: DESCRIPTION_MAX, optional: true }) ?? "").trim();
   const slug = typeof body.slug === "string" && body.slug ? body.slug.toLowerCase() : slugify(name);
   if (!SLUG_RE.test(slug)) throw new HttpError(400, "the channel's address must be 2–32 characters: a–z, 0–9 or -");
   const visibility = body.visibility ?? "public";
@@ -392,10 +398,11 @@ export async function createChannel(db: DB, user: User, body: Record<string, unk
   if (boardBySlug(db, "channel", slug)) throw new HttpError(409, "a channel with that address already exists");
   const id = tx(db, () => {
     const r = db
-      .prepare("INSERT INTO boards (kind, owner_id, slug, name, visibility, key_hash, created_at) VALUES ('channel', ?, ?, ?, ?, ?, ?)")
-      .run(user.id, slug, name, visibility, keyHash, Date.now());
+      .prepare("INSERT INTO boards (kind, owner_id, slug, name, visibility, key_hash, description, created_at) VALUES ('channel', ?, ?, ?, ?, ?, ?, ?)")
+      .run(user.id, slug, name, visibility, keyHash, description, Date.now());
     const id = Number(r.lastInsertRowid);
     db.prepare("INSERT INTO board_members (board_id, user_id) VALUES (?, ?)").run(id, user.id);
+    markSeen(db, id, user.id);
     setAccess(db, id, allow, deny);
     return id;
   });
@@ -405,6 +412,8 @@ export async function createChannel(db: DB, user: User, body: Record<string, unk
 
 function join(db: DB, board: Board, user: User): void {
   db.prepare("INSERT OR IGNORE INTO board_members (board_id, user_id) VALUES (?, ?)").run(board.id, user.id);
+  markSeen(db, board.id, user.id); // what was there before you joined isn't "new"
+
   logAction(user.username, "channel.join", { board: board.id });
 }
 
@@ -427,15 +436,86 @@ export async function joinChannel(db: DB, user: User, slug: string, body: Record
   return boardOut(db, board, user);
 }
 
-export function updateAccess(db: DB, user: User, slug: string, body: Record<string, unknown>) {
+export async function updateAccess(db: DB, user: User, slug: string, body: Record<string, unknown>) {
   const board = boardBySlug(db, "channel", slug.toLowerCase());
   if (!board) throw new HttpError(404, "no such channel");
   if (board.owner_id !== user.id) throw new HttpError(403, "only the channel's creator can change who's allowed in");
+  // channels start public when someone first opens them; the creator can
+  // close them later. A key is needed when switching to key, optional after.
+  const visibility = body.visibility ?? board.visibility;
+  if (visibility !== "public" && visibility !== "key" && visibility !== "list") {
+    throw new HttpError(400, "visibility must be public, key or list");
+  }
+  const name = body.name === undefined ? board.name : str(body, "name", { min: 1, max: 40 })!.trim();
+  if (!name) throw new HttpError(400, "name is required");
+  const description = body.description === undefined ? board.description : (str(body, "description", { max: DESCRIPTION_MAX, optional: true }) ?? "").trim();
+  let keyHash = visibility === "key" ? board.key_hash : null;
+  if (visibility === "key" && (body.key !== undefined || !keyHash)) keyHash = await hashSecret(str(body, "key", { min: 4, max: 100 })!);
   const allow = usernameList(body.allow, "allow");
   const deny = usernameList(body.deny, "deny").filter((u) => u !== user.username);
-  tx(db, () => setAccess(db, board.id, allow, deny));
-  logAction(user.username, "channel.access", { board: board.id, allow: allow.length, deny: deny.length });
-  return boardOut(db, board, user);
+  tx(db, () => {
+    db.prepare("UPDATE boards SET name = ?, description = ?, visibility = ?, key_hash = ? WHERE id = ?").run(name, description, visibility, keyHash, board.id);
+    setAccess(db, board.id, allow, deny);
+  });
+  logAction(user.username, "channel.access", { board: board.id, visibility, allow: allow.length, deny: deny.length });
+  return boardOut(db, getBoard(db, board.id)!, user);
+}
+
+export function leaveChannel(db: DB, user: User, slug: string): void {
+  const board = boardBySlug(db, "channel", slug.toLowerCase());
+  if (!board) throw new HttpError(404, "no such channel");
+  if (board.owner_id === user.id) throw new HttpError(400, "you made this channel, so you can't leave it");
+  tx(db, () => {
+    db.prepare("DELETE FROM board_members WHERE board_id = ? AND user_id = ?").run(board.id, user.id);
+    db.prepare("DELETE FROM board_seen WHERE board_id = ? AND user_id = ?").run(board.id, user.id);
+  });
+  logAction(user.username, "channel.leave", { board: board.id });
+}
+
+// ---------------------------------------------------------------- sidebar
+
+/** You've looked at this board up to now (opening it, or being on it while notes arrive). */
+export function markSeen(db: DB, boardId: number, userId: number): void {
+  db.prepare("INSERT INTO board_seen (board_id, user_id, seen_at) VALUES (?, ?, ?) ON CONFLICT (user_id, board_id) DO UPDATE SET seen_at = excluded.seen_at").run(
+    boardId,
+    userId,
+    Date.now(),
+  );
+}
+
+/**
+ * What the sidebar lists: the channels you're in, and the people whose boards
+ * you've visited (yours first). "unread" counts notes someone else added since
+ * you last looked, that you're allowed to see.
+ */
+export function sidebar(db: DB, user: User) {
+  const unread = `(SELECT COUNT(*) FROM notes n WHERE n.board_id = b.id AND n.created_at > s.seen_at AND n.author_id <> @me
+                    AND (n.visibility = 'public' OR b.owner_id = @me))`;
+  const latest = "(SELECT MAX(n.created_at) FROM notes n WHERE n.board_id = b.id)";
+  const channels = db
+    .prepare(
+      `SELECT b.slug, b.name, b.description, b.visibility, u.username AS owner, ${unread} AS unread, s.seen_at AS seenAt,
+              COALESCE(${latest}, b.created_at) AS activeAt,
+              (SELECT COUNT(*) FROM board_members m WHERE m.board_id = b.id) AS members
+       FROM board_members bm JOIN boards b ON b.id = bm.board_id JOIN board_seen s ON s.board_id = b.id AND s.user_id = @me
+       LEFT JOIN users u ON u.id = b.owner_id
+       WHERE bm.user_id = @me AND b.kind = 'channel'`,
+    )
+    .all({ me: user.id }) as { slug: string; name: string; description: string; visibility: string; owner: string; unread: number; seenAt: number; activeAt: number; members: number }[];
+  const people = db
+    .prepare(
+      `SELECT b.slug AS username, ${unread} AS unread, s.seen_at AS seenAt, COALESCE(${latest}, b.created_at) AS activeAt
+       FROM board_seen s JOIN boards b ON b.id = s.board_id
+       WHERE s.user_id = @me AND b.kind = 'user'`,
+    )
+    .all({ me: user.id }) as { username: string; unread: number; seenAt: number; activeAt: number }[];
+  return { channels: channels.map((c) => ({ ...c, isOwner: c.owner === user.username })), people };
+}
+
+/** Drop someone from your sidebar (until you visit their board again). */
+export function forgetPerson(db: DB, user: User, username: string): void {
+  if (username.toLowerCase() === user.username) throw new HttpError(400, "your own board always stays");
+  db.prepare("DELETE FROM board_seen WHERE user_id = ? AND board_id = (SELECT id FROM boards WHERE kind = 'user' AND slug = ?)").run(user.id, username.toLowerCase());
 }
 
 export function stats(db: DB) {
