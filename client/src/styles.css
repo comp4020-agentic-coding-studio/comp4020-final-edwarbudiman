@@ -688,11 +688,6 @@ table.stats tr + tr {
   top: 12px;
   right: 12px;
 }
-/* menus anchored on the right open towards the left */
-.menu-pop.end {
-  left: auto;
-  right: 0;
-}
 .island.tools {
   top: 12px;
   left: 50%;
@@ -818,9 +813,12 @@ table.stats tr + tr {
 .menu {
   position: relative;
 }
-.menu-button {
+.help-button {
   width: 2.75rem;
   height: 2.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 .menu-backdrop {
   position: fixed;
@@ -853,15 +851,6 @@ table.stats tr + tr {
 .menu-pop button:hover,
 .menu-pop .menu-item:hover {
   background: var(--hover);
-}
-.menu-who {
-  margin: 0.25rem 0.6rem 0.4rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-.menu-who strong {
-  color: var(--ink);
-  font-weight: 500;
 }
 
 /* ---------------------------------------------------------------- overlays */
@@ -1481,8 +1470,9 @@ table.stats tr + tr {
   flex: 1;
   min-width: 0;
 }
-/* with the sidebar closed, its toggle takes the board's top-left corner */
-.shell:not(.sidebar-open) .top-left {
+/* the sidebar toggle always holds the main column's corner; the board's own
+   top-left islands start just after it */
+.shell .top-left {
   left: 64px;
 }
 .sidebar-toggle {
@@ -1493,14 +1483,10 @@ table.stats tr + tr {
   width: 2.75rem;
   height: 2.75rem;
 }
-/* open: it sits in the sidebar's own corner, next to the title */
-.sidebar-toggle.on {
-  box-shadow: none;
-  background: transparent;
-  color: var(--ink);
-}
-.sidebar-toggle.on:hover {
-  background: var(--hover);
+.sidebar-toggle .pane {
+  fill: currentColor;
+  fill-opacity: 0.18;
+  stroke: none;
 }
 .sidebar-toggle .dot {
   position: absolute;
@@ -1527,7 +1513,7 @@ table.stats tr + tr {
   justify-content: space-between;
   gap: 8px;
   height: 68px;
-  padding: 0 10px 0 64px; /* clear of the sidebar toggle, which floats over the top-left corner */
+  padding: 0 10px 0 16px;
   flex: none;
 }
 .sidebar-brand {
@@ -1871,6 +1857,10 @@ button.board-title svg {
     left: 0;
     width: min(18rem, 82vw);
     box-shadow: var(--island-shadow);
+  }
+  /* the toggle floats over the drawer's corner and closes it */
+  .sidebar-head {
+    padding-left: 64px;
   }
   .side-x {
     opacity: 1;

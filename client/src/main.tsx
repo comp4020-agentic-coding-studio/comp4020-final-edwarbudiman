@@ -5,7 +5,7 @@ import { api, boardPath, setOnUnauthorized } from "./api.ts";
 import type { Me } from "./api.ts";
 import { AuthPage } from "./pages/Auth.tsx";
 import { BoardPage } from "./pages/Board.tsx";
-import { Sidebar } from "./pages/Channels.tsx";
+import { Shell } from "./pages/Channels.tsx";
 import { Settings } from "./pages/Settings.tsx";
 import { Stats } from "./pages/Stats.tsx";
 import { Link, SessionContext, navigate, usePath } from "./router.tsx";
@@ -54,12 +54,7 @@ function App() {
   let page: ReactNode;
   let m: RegExpMatchArray | null;
   // boards sit next to the sidebar; the other pages have their own header
-  const withSidebar = (board: ReactNode) => (
-    <div className="shell">
-      <Sidebar />
-      <div className="shell-main">{board}</div>
-    </div>
-  );
+  const withSidebar = (board: ReactNode) => <Shell>{board}</Shell>;
   if (path === "/") page = withSidebar(<BoardPage key={`u/${me.username}`} kind="user" slug={me.username} />);
   else if ((m = path.match(/^\/c\/([^/]+)\/?$/))) page = withSidebar(<BoardPage key={`c/${m[1]}`} kind="channel" slug={decodeURIComponent(m[1])} />);
   else if (path === "/settings") page = <Settings />;

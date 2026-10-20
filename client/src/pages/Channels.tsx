@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { api, ApiError, boardPath } from "../api.ts";
 import type { BoardInfo, ChannelSummary, SidebarChannel, SidebarPerson } from "../api.ts";
@@ -85,7 +85,9 @@ const SORTS: [Sort, string][] = [
 const SIDEBAR_KEY = "sidebar:open";
 const SORT_KEY = "sidebar:sort";
 
-export function Sidebar() {
+/** The board's frame: the sidebar beside the main column. Its toggle lives in
+ *  the main column's corner, so it stays put whether the sidebar is open or not. */
+export function Shell({ children }: { children: ReactNode }) {
   const { me, setMe } = useSession();
   const path = usePath();
   const [open, setOpen] = useState(() => store.get(SIDEBAR_KEY) !== "no" && window.innerWidth > 640);
@@ -115,12 +117,6 @@ export function Sidebar() {
   }, [load]);
   useEffect(() => onOpenCreateChannel((slug) => setCreating(slug)), []);
   useEffect(() => store.set(SIDEBAR_KEY, open ? "yes" : "no"), [open]);
-  // the board's islands make room for the toggle only while the sidebar is closed
-  const navRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const shell = navRef.current?.closest(".shell");
-    shell?.classList.toggle("sidebar-open", open);
-  }, [open]);
   useEffect(() => store.set(SORT_KEY, sort), [sort]);
 
   // the tab title carries the total, so a backgrounded tab shows there's news
@@ -160,22 +156,7 @@ export function Sidebar() {
   }
 
   return (
-    <>
-      <button
-        ref={navRef}
-        className={`island tool sidebar-toggle${open ? " on" : ""}`}
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-controls="sidebar"
-        title={open ? "Hide the sidebar" : "Show channels and people"}
-      >
-        <svg viewBox="0 0 20 20" aria-hidden>
-          <path d="M3.5 4.5h13v11h-13Z M8 4.5v11" />
-        </svg>
-        <span className="sr-only">Channels and people</span>
-        {!open && total > 0 && <span className="dot" aria-hidden />}
-      </button>
-
+    <div className="shell">
       {open && (
         <nav id="sidebar" className="sidebar" aria-label="Channels and people">
           <div className="sidebar-head">
@@ -296,6 +277,24 @@ export function Sidebar() {
         </nav>
       )}
 
+      <div className="shell-main">
+        <button
+          className="island tool sidebar-toggle"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-controls="sidebar"
+          title={open ? "Hide the sidebar" : "Show channels and people"}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden>
+            <path d="M3.5 4.5h13v11h-13Z M8 4.5v11" />
+            {open && <path className="pane" d="M3.5 4.5H8v11H3.5Z" />}
+          </svg>
+          <span className="sr-only">Channels and people</span>
+          {!open && total > 0 && <span className="dot" aria-hidden />}
+        </button>
+        {children}
+      </div>
+
       {creating !== null && (
         <CreateChannelDialog
           initial={creating}
@@ -316,7 +315,7 @@ export function Sidebar() {
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 

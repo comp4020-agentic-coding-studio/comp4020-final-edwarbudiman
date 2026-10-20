@@ -1341,7 +1341,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         <div className="viewport" />
         <MissingChannel slug={slug} onCreate={() => openCreateChannel(slug)} />
         <div className="island-row top-right">
-          <MainMenu onHelp={() => setHelpOpen(true)} />
+          <HelpButton onClick={() => setHelpOpen(true)} />
         </div>
         {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
       </div>
@@ -1353,7 +1353,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         <div className="viewport" />
         <JoinCard slug={slug} gate={gate} onJoined={() => void load(true)} />
         <div className="island-row top-right">
-          <MainMenu onHelp={() => setHelpOpen(true)} />
+          <HelpButton onClick={() => setHelpOpen(true)} />
         </div>
         {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
       </div>
@@ -1506,7 +1506,6 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       </div>
 
       <div className="island-row top-left">
-        <MainMenu onHelp={() => setHelpOpen(true)} />
         {can3D() && (
           <button
             className={`island tool view-toggle${flat ? "" : " on"}`}
@@ -1552,8 +1551,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         {flat && titleChip}
       </div>
 
-      {flat && others.length > 0 && (
-        <div className="island-row top-right">
+      <div className="island-row top-right">
+        {flat && others.length > 0 && (
           <div className="island presence-row" role="group" aria-label="People on this board">
             {others.slice(0, 6).map((p) => (
               <button
@@ -1573,8 +1572,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
               </span>
             )}
           </div>
-        </div>
-      )}
+        )}
+        <HelpButton onClick={() => setHelpOpen(true)} />
+      </div>
 
       {flat && followed && (
         <div className="island follow-chip" style={{ "--peer": peerColor(followed.sid) } as CSSProperties} role="status">
@@ -1685,43 +1685,14 @@ function boardTitle(board: BoardInfo): string {
   return board.kind === "channel" ? board.slug : board.isOwner ? "Your board" : `${board.owner}'s board`;
 }
 
-// ---------------------------------------------------------------- menu & help
+// ---------------------------------------------------------------- help
 
-function MainMenu({ onHelp }: { onHelp: () => void }) {
-  const { me } = useSession();
-  const [open, setOpen] = useState(false);
+function HelpButton({ onClick }: { onClick: () => void }) {
   return (
-    <div className="menu">
-      <button className="island tool menu-button" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((o) => !o)} title="Menu">
-        <svg viewBox="0 0 20 20" aria-hidden>
-          <path d="M4 6h12M4 10h12M4 14h12" />
-        </svg>
-        <span className="sr-only">Menu</span>
-      </button>
-      {open && (
-        <>
-          <div className="menu-backdrop" onPointerDown={() => setOpen(false)} />
-          <div className="island menu-pop end" role="menu" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
-            <p className="menu-who">
-              Signed in as <strong>{me.username}</strong>
-            </p>
-            <button
-              role="menuitem"
-              autoFocus
-              onClick={() => {
-                setOpen(false);
-                onHelp();
-              }}
-            >
-              Keyboard shortcuts <kbd>?</kbd>
-            </button>
-            <Link to="/settings" className="menu-item">
-              Settings
-            </Link>
-          </div>
-        </>
-      )}
-    </div>
+    <button className="island tool help-button" onClick={onClick} title="Keyboard shortcuts (?)">
+      <span aria-hidden>?</span>
+      <span className="sr-only">Keyboard shortcuts</span>
+    </button>
   );
 }
 
