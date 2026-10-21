@@ -256,6 +256,71 @@ itself only needs checkpoint A.
 
 ---
 
+## 4a. New spine (decided 22 Oct, see `fixed-idea.md`)
+
+The 3D/jobs/coins direction in `more-ideas.md` is parked. Next build order:
+
+### Checkpoint E — note status
+
+- [ ] **T29** Add `status` to the note schema (`todo → doing → done`, plus
+      `approved` if a note is a job per `fixed-idea.md` §3); migration.
+- [ ] **T30** Keys `S` / `Shift+S` cycle status forward/back (per
+      `fixed-idea.md` §10 keybindings; skip while typing, matches the
+      canvas's existing key-conflict table).
+- [ ] **T31** Status shown on the note (small UI indicator, not just colour).
+- [ ] **T32** `spec/` check: status persists, cycles correctly at both ends,
+      survives reload.
+- [ ] Update `.cursor/skills/verify-postits/features/` with a `note-status`
+      feature file once driven end-to-end.
+- [ ] **Commit + push.**
+
+### Checkpoint F — agent-accessible triage (read-only MCP server)
+
+- [ ] **T33** Settings: generate/revoke a self-serve API token, shown once,
+      hashed at rest (same shape as a password, not stored plaintext).
+- [ ] **T34** Token-authenticated read-only API surface: list notes
+      (filter by status/label/age), board summary (counts by status, oldest
+      untouched notes, label breakdown).
+- [ ] **T35** MCP server wrapping that surface as tools (`list_notes`,
+      `get_board_summary`, `find_stale_notes`); documented so a user can
+      point their own agent at it.
+- [ ] **T36** `spec/` check: token auth required and scoped to its owner's
+      board; a revoked token is rejected immediately.
+- [ ] Add an MCP-driving feature file to `verify-postits` once this is
+      proven working against a real agent client.
+- [ ] **Commit + push.**
+
+### Checkpoint G — agent-discoverability polish
+
+- [ ] **T37** `robots.txt`, sitemap, AI-specific bot rules.
+- [ ] **T38** Semantic HTML audit on public pages (H1/heading structure,
+      content readable without JS where feasible).
+- [ ] **T39** Markdown-negotiated content for key pages (content
+      negotiation: serve a markdown alternate to an agent that asks for it).
+- [ ] **T40** Document the `/api/*` surface (OpenAPI or equivalent) and link
+      it discoverably (api catalog / `auth.md`-style pointer to the token
+      flow from T33).
+- [ ] Spot-check against isitagentready.com and is-agentic.com; record the
+      before/after in an ADR or `PROCESS.md`, not as a target to game.
+- [ ] **Commit + push.**
+
+### Checkpoint H — offline-first, single-player
+
+- [ ] **T41** Service worker + asset caching so the client shell loads with
+      no network.
+- [ ] **T42** Local-first board state (IndexedDB or similar) for the signed-
+      in user's own board; read and write while offline.
+- [ ] **T43** Sync on reconnect: queued local writes push to the server;
+      single-writer-while-offline means no merge logic needed yet.
+- [ ] **T44** `spec/` check: create/edit/move notes with the network
+      disabled, reconnect, confirm the server has them.
+- [ ] Add an offline-driving feature file to `verify-postits` (note:
+      `claude-in-chrome` can throttle/disable network via devtools protocol
+      if available, otherwise document the manual repro).
+- [ ] **Commit + push.**
+
+---
+
 ## 5. Later crits
 
 ### Crit 9 — All at once (Wed 14 Oct 07:00)

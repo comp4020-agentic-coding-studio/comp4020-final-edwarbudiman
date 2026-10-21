@@ -4,7 +4,39 @@ What we've decided to build, taken from the brainstorm in `more-ideas.md`.
 This file only holds decisions; anything still being thought about, or kept
 for later, stays in `more-ideas.md`.
 
-## In one paragraph
+## Current spine (decided 22 Oct, supersedes the paragraph below)
+
+Post-its stays a board for your notes, where a note's position is how you
+prioritise and group it. Nothing about that changes. Three things get built
+next, in this order, before anything else:
+
+1. **Note status** (`todo → doing → done`, section 3/6 below) — already
+   designed, makes everything after it more useful.
+2. **Agent-accessible triage**: a read-only MCP server so a user's own agent
+   (not a chatbot we host) can list/summarise/flag notes on their board —
+   stale notes, status breakdown, label clusters — and suggest what to
+   triage. The person still clicks to act; v1 is read-only. Auth is a
+   self-serve API token generated in Settings, pasted into the user's agent
+   config — no OAuth flow, no hosted inference cost on our side.
+3. **Agent-discoverability polish**: robots.txt, sitemap, semantic HTML,
+   markdown-negotiated pages, a documented `/api/*` surface — the
+   discoverability layer the scanners at isitagentready.com and
+   is-agentic.com check for. Cheap, slots in anytime after (2).
+4. **Offline-first, single-player**: your own board works fully with no
+   network (cache + local storage/IndexedDB) and pushes changes when back
+   online. No merge/conflict resolution needed — you're the only writer
+   while offline. Separable from (1)-(3); can run in its own worktree in
+   parallel.
+
+The **3D home/hall, portals, job board, coin economy, levels, dust, and
+day/night** sections below (1-11, and all of `more-ideas.md`) are **parked**,
+not cancelled. They were a second, bigger product (gamified virtual
+coworking) that doesn't share a thesis with "board for your notes, position
+is priority, less lonely." They stay written up here and in `more-ideas.md`
+as a possible future direction once the spine above is solid, not as the
+next thing to build.
+
+## In one paragraph (superseded — kept for the parked 3D direction)
 
 Post-its is still a board for your notes, where a note's position is how you
 prioritise and group it. Now every user also has a **home** and every

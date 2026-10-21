@@ -1,5 +1,12 @@
 # More ideas
 
+**Parked as of 22 Oct** — see `fixed-idea.md`'s "Current spine" section. The
+whole 3D/travel/jobs/coins/levels/dust world below doesn't share a thesis
+with the minimal post-it board, so it's on hold while the spine (note
+status, agent-accessible triage via MCP, agent-discoverability, offline
+single-player) gets built instead. Nothing below is cancelled, just not
+next.
+
 A brainstorm on where Post-its goes after the minimal board. The world is
 **separate spaces** (your home, each channel's hall) joined by **travel**,
 and the simple board is a real mode that frees the 3D part from memory. The
