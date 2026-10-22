@@ -86,6 +86,11 @@ const MIGRATIONS: string[] = [
     SELECT id, owner_id, CAST(strftime('%s', 'now') AS INTEGER) * 1000 FROM boards WHERE kind = 'user';
   CREATE INDEX notes_board_created ON notes(board_id, created_at);
   `,
+  // 5: note status. 'approved' is allowed here but not by the app yet: only a
+  // job's giver approves, and jobs come later without a table rebuild.
+  `
+  ALTER TABLE notes ADD COLUMN status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo','doing','done','approved'));
+  `,
 ];
 
 export function openDb(dataDir: string): DB {
