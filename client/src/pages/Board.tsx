@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { api, ApiError, COLORS, LABEL_MAX, LABELS_PER_NOTE } from "../api.ts";
+import { api, ApiError, COLORS, LABEL_MAX, LABELS_PER_NOTE, STATUSES } from "../api.ts";
 import type { BoardInfo, Color, Note } from "../api.ts";
 import { LiveSocket } from "../socket.ts";
 import type { ServerMsg, Status } from "../socket.ts";
@@ -86,6 +86,9 @@ const COLOR_NAMES: Record<Color, string> = {
   orange: "Orange",
   purple: "Purple",
 };
+
+const STATUS_NAMES: Record<Note["status"], string> = { todo: "to do", doing: "doing", done: "done" };
+const STATUS_GLYPHS: Record<Note["status"], string> = { todo: "○", doing: "◐", done: "✓" };
 
 // each person in a room gets a colour of their own, from their connection id
 const PEER_COLORS = ["#e5484d", "#f76b15", "#30a46c", "#0090ff", "#8e4ec6", "#d6409f", "#12a594", "#ab6400"];
@@ -562,7 +565,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   // ---------------------------------------------------------------- note writes
 
   const patchNote = useCallback(
-    async (id: number, change: Partial<Pick<Note, "text" | "color" | "visibility" | "labels" | "x" | "y">> & { front?: boolean }) => {
+    async (id: number, change: Partial<Pick<Note, "text" | "color" | "visibility" | "labels" | "status" | "x" | "y">> & { front?: boolean }) => {
       const before = notesRef.current[id];
       if (!before) return;
       const { front: _front, ...local } = change;
@@ -593,6 +596,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       z: 999_999,
       visibility: "public",
       labels: filterLabels(), // a note made while filtering stays in view
+      status: "todo",
       version: 0,
       createdAt: now,
       updatedAt: now,
@@ -759,6 +763,19 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       const n = notesRef.current[id];
       if (n?.canEdit && n.color !== c) void patchNote(id, { color: c });
     }
+  }
+
+  /** Step each selected note you may edit one status forward or back; the ends stop rather than wrap. */
+  function shiftStatus(dir: 1 | -1) {
+    let stuck = false;
+    for (const id of selectedRef.current) {
+      const n = notesRef.current[id];
+      if (!n?.canEdit || id < 0) continue;
+      const next = STATUSES[STATUSES.indexOf(n.status) + dir];
+      if (next) void patchNote(id, { status: next });
+      else stuck = true;
+    }
+    if (stuck) flash(`Already ${STATUS_NAMES[dir === 1 ? STATUSES[STATUSES.length - 1] : STATUSES[0]]}.`);
   }
 
   // ---------------------------------------------------------------- clipboard
@@ -954,6 +971,13 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         if (sel.size) {
           e.preventDefault();
           setLabelOpen(true);
+        }
+        return;
+      case "s":
+      case "S":
+        if (sel.size) {
+          e.preventDefault();
+          shiftStatus(e.shiftKey ? -1 : 1);
         }
         return;
       case "v":
@@ -1636,6 +1660,11 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
               Label
             </button>
           )}
+          {selNotes.some((n) => n.canEdit) && (
+            <button className="quiet" onClick={() => shiftStatus(1)} title="Move status forward (S; Shift S goes back)">
+              Status
+            </button>
+          )}
           <button className="quiet" onClick={duplicateSelection} title="Duplicate (⌘D / Ctrl+D)">
             Duplicate
           </button>
@@ -1705,6 +1734,7 @@ const SHORTCUTS: [string, string][] = [
   ["Copy, cut, paste", `${mod} C, ${mod} X, ${mod} V`],
   ["Duplicate", `${mod} D`],
   ["Label the selection", "L"],
+  ["Status forward / back", "S, Shift S"],
   ["Follow someone", "Click their avatar, top right (Esc stops)"],
   ["Delete", "Delete or Backspace"],
   ["Move the selection", "Arrow keys (Shift for bigger steps)"],
@@ -1889,11 +1919,11 @@ function NoteCard(props: {
 
   const heldByOther = lock && !lock.mine;
   const isPrivate = note.visibility === "private";
-  const label = `Note${props.showAuthor ? ` by ${note.author}` : ""}${isPrivate ? ", private" : ""}${note.labels.length ? `, labelled ${note.labels.join(", ")}` : ""}: ${note.text || "empty"}`;
+  const label = `Note${props.showAuthor ? ` by ${note.author}` : ""}${isPrivate ? ", private" : ""}, ${STATUS_NAMES[note.status]}${note.labels.length ? `, labelled ${note.labels.join(", ")}` : ""}: ${note.text || "empty"}`;
   return (
     <div
       data-note={note.id}
-      className={`note c-${note.color}${selected ? " selected" : ""}${editing ? " editing" : ""}${dragging ? " dragging" : ""}${heldByOther ? " held" : ""}${note.canMove ? " movable" : ""}${props.filteredOut ? " filtered-out" : ""}`}
+      className={`note c-${note.color} s-${note.status}${selected ? " selected" : ""}${editing ? " editing" : ""}${dragging ? " dragging" : ""}${heldByOther ? " held" : ""}${note.canMove ? " movable" : ""}${props.filteredOut ? " filtered-out" : ""}`}
       style={{ left: note.x, top: note.y, width: NOTE_W, height: NOTE_H, zIndex: dragging ? 1_000_000 : note.z }}
       tabIndex={props.filteredOut ? -1 : 0}
       aria-hidden={props.filteredOut || undefined}
@@ -1938,25 +1968,27 @@ function NoteCard(props: {
       ) : (
         <p className="note-text">{note.text || <span className="placeholder">{note.canEdit ? "Double-click to write" : "Empty"}</span>}</p>
       )}
-      {(props.showAuthor || isPrivate || note.labels.length > 0) && (
-        <footer className="note-foot">
-          <span className="chips">
-            {note.labels.map((l) => (
-              <span key={l} className="chip">
-                {l}
-              </span>
-            ))}
-          </span>
-          <span className="meta">
-            {props.showAuthor && <span className="author">{note.author}</span>}
-            {isPrivate && (
-              <span className="badge" title={props.isBoardOwnersView ? "Only you and its author can see this" : "Only you and the board's owner can see this"}>
-                private
-              </span>
-            )}
-          </span>
-        </footer>
-      )}
+      <footer className="note-foot">
+        <span className="status" aria-hidden="true">
+          <span className="glyph">{STATUS_GLYPHS[note.status]}</span>
+          {STATUS_NAMES[note.status]}
+        </span>
+        <span className="chips">
+          {note.labels.map((l) => (
+            <span key={l} className="chip">
+              {l}
+            </span>
+          ))}
+        </span>
+        <span className="meta">
+          {props.showAuthor && <span className="author">{note.author}</span>}
+          {isPrivate && (
+            <span className="badge" title={props.isBoardOwnersView ? "Only you and its author can see this" : "Only you and the board's owner can see this"}>
+              private
+            </span>
+          )}
+        </span>
+      </footer>
       {heldByOther && <div className="held-by">{lock!.holder} is moving this</div>}
     </div>
   );
