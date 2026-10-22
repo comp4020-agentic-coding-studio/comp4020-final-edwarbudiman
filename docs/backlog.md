@@ -262,15 +262,15 @@ The 3D/jobs/coins direction in `more-ideas.md` is parked. Next build order:
 
 ### Checkpoint E — note status
 
-- [ ] **T29** Add `status` to the note schema (`todo → doing → done`, plus
+- [x] **T29** Add `status` to the note schema (`todo → doing → done`, plus
       `approved` if a note is a job per `fixed-idea.md` §3); migration.
-- [ ] **T30** Keys `S` / `Shift+S` cycle status forward/back (per
+- [x] **T30** Keys `S` / `Shift+S` cycle status forward/back (per
       `fixed-idea.md` §10 keybindings; skip while typing, matches the
       canvas's existing key-conflict table).
-- [ ] **T31** Status shown on the note (small UI indicator, not just colour).
-- [ ] **T32** `spec/` check: status persists, cycles correctly at both ends,
+- [x] **T31** Status shown on the note (small UI indicator, not just colour).
+- [x] **T32** `spec/` check: status persists, cycles correctly at both ends,
       survives reload.
-- [ ] Update `.cursor/skills/verify-postits/features/` with a `note-status`
+- [x] Update `.cursor/skills/verify-postits/features/` with a `note-status`
       feature file once driven end-to-end.
 - [ ] **Commit + push.**
 
