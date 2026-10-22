@@ -775,7 +775,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       if (next) void patchNote(id, { status: next });
       else stuck = true;
     }
-    if (stuck) flash(`Already ${STATUS_NAMES[dir === 1 ? STATUSES[STATUSES.length - 1] : STATUSES[0]]}.`);
+    if (stuck) flash(dir === 1 ? "Already done. Shift S goes back." : "Already to do.");
   }
 
   // ---------------------------------------------------------------- clipboard
@@ -1661,7 +1661,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
             </button>
           )}
           {selNotes.some((n) => n.canEdit) && (
-            <button className="quiet" onClick={() => shiftStatus(1)} title="Move status forward (S; Shift S goes back)">
+            <button className="quiet" onClick={(e) => shiftStatus(e.shiftKey ? -1 : 1)} title="Move status forward (S); Shift-click or Shift S goes back">
               Status
             </button>
           )}
