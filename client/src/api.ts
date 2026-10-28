@@ -10,6 +10,8 @@ export interface Me {
 
 export type Color = "yellow" | "pink" | "blue" | "green" | "orange" | "purple";
 export const COLORS: Color[] = ["yellow", "pink", "blue", "green", "orange", "purple"];
+export const STATUSES = ["todo", "doing", "done"] as const;
+export type Status = (typeof STATUSES)[number];
 export const LABEL_MAX = 24;
 export const LABELS_PER_NOTE = 5;
 
@@ -30,6 +32,7 @@ export interface Note {
   z: number;
   visibility: "public" | "private";
   labels: string[];
+  status: Status;
   version: number;
   createdAt: number;
   updatedAt: number;

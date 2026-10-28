@@ -32,12 +32,15 @@ export interface NoteRow {
   z: number;
   visibility: "public" | "private";
   labels: string; // JSON array
+  status: Status;
   version: number;
   created_at: number;
   updated_at: number;
 }
 
 export const COLORS = ["yellow", "pink", "blue", "green", "orange", "purple"] as const;
+export const STATUSES = ["todo", "doing", "done"] as const;
+export type Status = (typeof STATUSES)[number];
 export const NOTE_MAX = 280;
 export const LABEL_MAX = 24;
 export const LABELS_PER_NOTE = 5;
@@ -54,7 +57,7 @@ export const hooks = {
 };
 
 const BOARD_COLS = "b.id, b.kind, b.owner_id, u.username AS owner_name, b.slug, b.name, b.visibility, b.key_hash, b.description, b.created_at";
-const NOTE_COLS = "n.id, n.board_id, n.author_id, u.username AS author, n.text, n.color, n.x, n.y, n.z, n.visibility, n.labels, n.version, n.created_at, n.updated_at";
+const NOTE_COLS = "n.id, n.board_id, n.author_id, u.username AS author, n.text, n.color, n.x, n.y, n.z, n.visibility, n.labels, n.status, n.version, n.created_at, n.updated_at";
 
 export function getBoard(db: DB, id: number): Board | undefined {
   return db.prepare(`SELECT ${BOARD_COLS} FROM boards b LEFT JOIN users u ON u.id = b.owner_id WHERE b.id = ?`).get(id) as Board | undefined;
@@ -111,6 +114,7 @@ export function noteOut(board: Board, note: NoteRow, userId: number) {
     z: note.z,
     visibility: note.visibility,
     labels: readLabels(note.labels),
+    status: note.status,
     version: note.version,
     createdAt: note.created_at,
     updatedAt: note.updated_at,
@@ -205,6 +209,13 @@ function parseColor(v: unknown): string {
   return v;
 }
 
+function parseStatus(v: unknown): Status {
+  if (typeof v !== "string" || !(STATUSES as readonly string[]).includes(v)) {
+    throw new HttpError(400, `status must be one of ${STATUSES.join(", ")}`);
+  }
+  return v as Status;
+}
+
 /** Trimmed, de-duplicated ignoring case, stored as a JSON array. */
 function parseLabels(v: unknown): string {
   if (!Array.isArray(v) || v.length > 50) throw new HttpError(400, `labels must be a list of up to ${LABELS_PER_NOTE} labels`);
@@ -236,14 +247,15 @@ export function createNote(db: DB, user: User, boardId: number, body: Record<str
   const color = body.color === undefined ? "yellow" : parseColor(body.color);
   const visibility = body.visibility === undefined ? "public" : parseVisibility(board, body.visibility);
   const labels = body.labels === undefined ? "[]" : parseLabels(body.labels);
+  const status = body.status === undefined ? "todo" : parseStatus(body.status);
   const x = num(body, "x", true) ?? 0;
   const y = num(body, "y", true) ?? 0;
   const now = Date.now();
   const id = tx(db, () => {
     const { z } = db.prepare("SELECT COALESCE(MAX(z), 0) + 1 AS z FROM notes WHERE board_id = ?").get(board.id) as { z: number };
     const r = db
-      .prepare("INSERT INTO notes (board_id, author_id, text, color, x, y, z, visibility, labels, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(board.id, user.id, text, color, x, y, z, visibility, labels, now, now);
+      .prepare("INSERT INTO notes (board_id, author_id, text, color, x, y, z, visibility, labels, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(board.id, user.id, text, color, x, y, z, visibility, labels, status, now, now);
     return Number(r.lastInsertRowid);
   });
   const note = getNote(db, id)!;
@@ -268,7 +280,7 @@ export function updateNote(db: DB, user: User, noteId: number, body: Record<stri
   const args: (string | number)[] = [];
   const changed: string[] = [];
 
-  const content = body.text !== undefined || body.color !== undefined || body.visibility !== undefined || body.labels !== undefined;
+  const content = body.text !== undefined || body.color !== undefined || body.visibility !== undefined || body.labels !== undefined || body.status !== undefined;
   if (content && !canEdit(board, note, user.id)) throw new HttpError(403, "you can only edit your own notes here");
   if (body.text !== undefined) {
     sets.push("text = ?");
@@ -289,6 +301,11 @@ export function updateNote(db: DB, user: User, noteId: number, body: Record<stri
     sets.push("labels = ?");
     args.push(parseLabels(body.labels));
     changed.push("labels");
+  }
+  if (body.status !== undefined) {
+    sets.push("status = ?");
+    args.push(parseStatus(body.status));
+    changed.push("status");
   }
 
   const moving = body.x !== undefined || body.y !== undefined || body.front === true;
