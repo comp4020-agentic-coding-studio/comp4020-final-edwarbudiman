@@ -38,3 +38,12 @@ people.
   colour and label, with a filter to show only some labels.
 - Live cursors of whoever else is on the board, and you can click someone to
   follow them.
+
+## How I'm building it
+
+From here on, each feature is built by Claude Code agents running side by side
+in [Herdr](https://herdr.dev). I set the direction with one orchestrating
+session. Each feature then gets its own git worktree, a builder agent, and a
+separate reviewer agent that runs the tests and uses the real app in a
+browser. I try every feature myself before I merge it. The details are in
+[`docs/orchestration/README.md`](docs/orchestration/README.md).

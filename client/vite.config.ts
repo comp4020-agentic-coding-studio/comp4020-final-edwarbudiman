@@ -12,7 +12,9 @@ export default defineConfig({
   // three.js (the 3D room) is one chunk of its own, loaded only when 3D opens
   build: { outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 600 },
   server: {
-    port: 5173,
+    // Each feature worktree gets its own pair (scripts/orch/spawn.sh)
+    port: Number(process.env.CLIENT_PORT ?? 5173),
+    strictPort: true,
     proxy: {
       "/api": { target, changeOrigin: false },
       "/readme": { target, changeOrigin: false },

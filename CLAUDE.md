@@ -84,3 +84,21 @@ and tested. Each feature lives in its own linked worktree:
 - When a feature is ready, merge it into `main` from root (`git merge feat/<name>`),
   test it there, then run the sync script so the other features pick it up.
 - Use merges to bring `main` into a feature branch, not rebases.
+
+## Working with agents
+
+Feature work can run as a pipeline in Herdr: the owner and an orchestrator
+session set the direction, then each feature gets a builder agent and a
+separate reviewer agent in its own worktree. The playbook is the
+`orchestrate-postits` skill (`.cursor/skills/orchestrate-postits/`); the
+scripts are in `scripts/orch/`; the orchestrator's state is
+`docs/orchestration/state.md`; the human-readable summary is
+`docs/orchestration/README.md`.
+
+- `scripts/orch/spawn.sh <feature> builder|reviewer` creates the worktree and
+  Herdr workspace above on first use, so don't create them by hand as well.
+- Each feature worktree has its own ports (`PORT`, `CLIENT_PORT`,
+  `VERIFY_SERVER_PORT`, `VERIFY_CLIENT_PORT`). Main keeps 8080/5173.
+- Workers commit in their worktree and never merge, push or rebase. Only the
+  owner merges into `main`, after checking the feature by hand.
+- Checks: `pnpm check`. App verification: the `verify-postits` skill.
