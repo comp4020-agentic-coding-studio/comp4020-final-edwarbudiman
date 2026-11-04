@@ -49,3 +49,13 @@ Does dragging a few arrows between my notes make the board say "this affects tha
 - **Drawing on phones** (with the nub or the tool) is a follow-up.
 - **Arrows on channel boards** are "not for now", not rejected.
 - **A show/hide arrows toggle** (C's fallback) is worth revisiting if the spike shows clutter.
+
+## Changed after the spikes
+
+Settled with the owner through `/taste` on spikes 1–3 and the spike-3 tweaks (root `docs/taste.md`, 2026-11-05). These override the lines above.
+
+- **Nub on four sides.** It appears on whichever edge (top, right, bottom or left) the mouse is nearest, measured from the note's centre, and shows on hover only.
+- **Magnetic, movable ends.** No longer centre to centre. While you draw or drag, an end follows the mouse and snaps to the nearest point on any edge of a nearby note. Each end's spot (side plus position along it) is saved, so it stays put when the note moves. Hovering an arrow shows a handle on each end, which you can drag to move it or re-target it to another note.
+- **A→B and B→A are two separate lines**, each with its own head.
+- **Arrow colour.** With an arrow selected, the toolbar swatches recolour it. The default is still the source note's colour. This replaces "no colours" in the off-limits list. The owner asked for it in a spike tweak.
+- **Saved in the database**, never in localStorage.
