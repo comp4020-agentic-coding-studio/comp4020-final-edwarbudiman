@@ -41,7 +41,8 @@ Several ideas can run at once, each in its own workspace. Keep at most three wor
 | 2 | Decide | the lead runs it in its own tab (`roles/decider.md`); `spawn.sh <idea> decider` only without a lead | `decision.md`: the owner's pick, grilled, with "it works if" lines | spawn the spiker |
 | 3 | Spike | `spawn.sh <idea> spiker` | a smoke test running on the spike ports | **taste gate** |
 | 4 | Build | brief, then `spawn.sh <idea> builder` | commits on `feat/<idea>` | spawn the reviewer |
-| 5 | Review | `spawn.sh <idea> reviewer` | verdict and app drive | **taste gate**, then the owner's merge |
+| 5 | Review | `spawn.sh <idea> reviewer` | verdict and app drive | on approve, spawn the documenter |
+| 5b | Docs | `spawn.sh <idea> documenter` | `docs/site/features/<slug>.md` and its demo, committed on `feat/<idea>` | **taste gate** (the owner tries the feature and reads its page), then the owner's merge |
 | 6 | Reflect | in this session | updates to `taste.md`, `rejected.md`, these skill files | the next idea starts better |
 
 After each `spawn.sh`, run `scripts/orch/wait.sh <idea> <role>` with `run_in_background`; its exit is the completion event. Don't poll.
@@ -69,6 +70,12 @@ Verdict `changes`: append a `## Fix round` section to the brief that points at t
 ### Merge
 
 After the owner's taste check on an approved feature, they merge from root (`git merge feat/<idea>`, or merge the PR on GitHub and `git pull` in root), then run `scripts/sync-worktrees.sh` and `scripts/orch/retire.sh <idea>`. A rejected idea goes in `docs/rejected.md` first, then `retire.sh <idea> --rejected`.
+
+### Docs (stage 5b)
+
+When the reviewer writes `verdict: approve`, spawn the documenter straight away (`spawn.sh <idea> documenter`, then `wait.sh <idea> documenter`). It opens in a new tab of the idea's workspace, writes the feature's `/docs/` page, records a real demo, and commits both on `feat/<idea>`. Only then show the owner the taste gate: the feature on its ports and its page at `/docs/features/<slug>/`. If the documenter reports `status: blocked` because a step doesn't work, treat it as a fix round.
+
+A merged idea with no page fails `pnpm check:docs` on `main` (it reads Done in `state.md`), so never ask the owner to merge before the documenter has reported `status: done`. When a merge changes what users can do, remind the owner they can cut a docs version with `pnpm docs:version`.
 
 `retire.sh` is the whole cleanup: it stops the servers on the idea's ports, removes both worktrees, deletes the local branches and `feat/<idea>` on origin, moves the idea to Done in `state.md`, and closes the idea's Herdr workspace with every agent tab. It closes the workspace last, so the idea's lead can run it once the owner says the merge is in. Commit `state.md` on main afterwards.
 

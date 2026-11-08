@@ -10,7 +10,8 @@ source "$(dirname "$0")/lib.sh"
 # The stage an idea is at, from which of its files exist.
 stage() {
   local d="$(role_worktree "$1" builder)/docs/ideas/$1" s="$orch_dir/$1"
-  if [ -s "$s/reports/reviewer-$(last_round "$1" reviewer).md" ]; then echo review
+  if [ -s "$s/reports/documenter-$(last_round "$1" documenter).md" ]; then echo docs
+  elif [ -s "$s/reports/reviewer-$(last_round "$1" reviewer).md" ]; then echo review
   elif [ -s "$s/brief.md" ]; then echo build
   elif [ -s "$d/decision.md" ]; then echo spike/taste
   elif [ -s "$d/research.md" ]; then echo decide

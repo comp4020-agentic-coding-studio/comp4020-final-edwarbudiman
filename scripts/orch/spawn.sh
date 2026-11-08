@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# spawn.sh <idea> <lead|researcher|decider|spiker|builder|reviewer> [model]
+# spawn.sh <idea> <lead|researcher|decider|spiker|builder|reviewer|documenter> [model]
 #
 # Starts one worker for an idea in Herdr and returns without waiting.
 # One idea = one Herdr workspace (labelled feat/<idea>, like its branch); every worker is a tab.
@@ -17,6 +17,7 @@
 #   spiker      docs/ideas/<idea>/decision.md
 #   builder     .claude/orch/<idea>/brief.md
 #   reviewer    a builder report
+#   documenter  a reviewer report with verdict: approve
 #
 # Environment: ORCH_PERMISSION_MODE (default auto) and ORCH_<ROLE>_MODEL,
 # e.g. ORCH_BUILDER_MODEL (defaults below).
@@ -34,6 +35,7 @@ case "$role" in
   spiker) default=sonnet ;;
   builder) default=sonnet ;;
   reviewer) default=opus ;;
+  documenter) default=sonnet ;;
 esac
 var="ORCH_$(tr a-z A-Z <<<"$role")_MODEL"
 model="${3:-${!var:-$default}}"
@@ -52,8 +54,13 @@ case "$role" in
   spiker) need="$idea_docs/decision.md" ;;
   builder) need="$brief" ;;
   reviewer) need="$state/reports/builder-$(last_round "$name" builder).md" ;;
+  documenter) need="$state/reports/reviewer-$(last_round "$name" reviewer).md" ;;
 esac
 [ -s "$need" ] || die "$role needs $need first (see $skill_dir/SKILL.md)"
+# the docs describe what shipped, so only an approved build gets a documenter
+if [ "$role" = documenter ] && [ "$(header_field "$need" verdict)" != approve ]; then
+  die "documenter needs the latest review to say verdict: approve ($need)"
+fi
 
 wt="$(role_worktree "$name" "$role")"
 branch="$(role_branch "$name" "$role")"
