@@ -10,7 +10,7 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
-- `note-sidebar` — taste (spike-2) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
+- `note-sidebar` — review (reviewer-2) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
 
 ## Decisions
 
@@ -21,7 +21,7 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 ## To-do for the owner
 
 <!-- Decide sessions, taste gates (with the /taste reminder), merges, blocked dialogs. -->
-- `note-sidebar`: spike-2 ready at http://localhost:5198/ (alice / bob, spike-pass-123). Try it, then run /taste in the lead-1 tab of workspace `feat/note-sidebar`.
+- `note-sidebar`: reviewer-1 asked for changes (the +N pill is clipped in crowd rows); builder-2 fixing, then reviewer-2, then the owner's last check, PR and merge.
 
 ## Reflections
 
