@@ -24,7 +24,7 @@ function App() {
   // if the SPA ever lands on a server page (a navigate(), popstate or a dev
   // server that served index.html), load it for real instead of showing a board
   useEffect(() => {
-    if (serverPage) location.replace(location.pathname + location.search + location.hash);
+    if (serverPage) location.assign(location.pathname + location.search + location.hash);
   }, [serverPage]);
   const [me, setMe] = useState<Me | null | undefined>(undefined);
 

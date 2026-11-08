@@ -17,8 +17,9 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": { target, changeOrigin: false },
-      "/readme": { target, changeOrigin: false },
-      "/docs": { target, changeOrigin: false },
+      // Anchored, so usernames like /docs-x or /readmex stay boards in the SPA
+      "^/readme(/|$)": { target, changeOrigin: false },
+      "^/docs(/|$)": { target, changeOrigin: false },
       "/ws": { target, ws: true, changeOrigin: false },
     },
   },
