@@ -10,8 +10,9 @@
     "build": "vite build --config client/vite.config.ts",
     "start": "node --disable-warning=ExperimentalWarning server/src/index.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p client",
-    "check": "pnpm typecheck && pnpm test",
+    "check": "pnpm typecheck && pnpm check:docs && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
+    "check:docs": "node scripts/check-docs.ts",
     "test": "vitest run"
   },
   "devDependencies": {

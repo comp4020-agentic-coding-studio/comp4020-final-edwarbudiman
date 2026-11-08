@@ -41,7 +41,7 @@ Several ideas can run at once, each in its own workspace. Keep at most three wor
 | 2 | Decide | the lead runs it in its own tab (`roles/decider.md`); `spawn.sh <idea> decider` only without a lead | `decision.md`: the owner's pick, grilled, with "it works if" lines | spawn the spiker |
 | 3 | Spike | `spawn.sh <idea> spiker` | a smoke test running on the spike ports | **taste gate** |
 | 4 | Build | brief, then `spawn.sh <idea> builder` | commits on `feat/<idea>` | spawn the reviewer |
-| 5 | Review | `spawn.sh <idea> reviewer` | verdict and app drive | **taste gate**, then the owner's merge |
+| 5 | Review | `spawn.sh <idea> reviewer` | verdict, app drive, and a demo for the docs page | **taste gate**, then the owner's merge |
 | 6 | Reflect | in this session | updates to `taste.md`, `rejected.md`, these skill files | the next idea starts better |
 
 After each `spawn.sh`, run `scripts/orch/wait.sh <idea> <role>` with `run_in_background`; its exit is the completion event. Don't poll.
@@ -69,6 +69,8 @@ Verdict `changes`: append a `## Fix round` section to the brief that points at t
 ### Merge
 
 After the owner's taste check on an approved feature, they merge from root (`git merge feat/<idea>`, or merge the PR on GitHub and `git pull` in root), then run `scripts/sync-worktrees.sh` and `scripts/orch/retire.sh <idea>`. A rejected idea goes in `docs/rejected.md` first, then `retire.sh <idea> --rejected`.
+
+Before merging, the feature's `/docs/` page (`docs/site/features/<slug>.md`, with `idea: <idea>`) must be on the branch with its demo from the reviewer's evidence. After `retire.sh` adds the idea under Done in `state.md`, `pnpm check:docs` fails on `main` until that page exists.
 
 `retire.sh` is the whole cleanup: it stops the servers on the idea's ports, removes both worktrees, deletes the local branches and `feat/<idea>` on origin, moves the idea to Done in `state.md`, and closes the idea's Herdr workspace with every agent tab. It closes the workspace last, so the idea's lead can run it once the owner says the merge is in. Commit `state.md` on main afterwards.
 

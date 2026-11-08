@@ -65,7 +65,12 @@ build, so it judges only from the brief, the diff, the running app and my taste.
 2. **Build**, then **review** when the builder reports `status: done`.
 3. **Fix rounds.** On `verdict: changes`, a fresh builder fixes the blockers and a
    fresh reviewer checks again. After two failed rounds it comes back to me.
-4. **My check.** On `verdict: approve`, I try it on its ports and run `/taste`.
+4. **Docs page.** The builder writes `docs/site/features/<slug>.md` (what it is,
+   "How to use it" steps, which specs check it), and the reviewer checks every
+   step against the app and records a demo GIF or screenshot. `pnpm check:docs`
+   fails on `main` if a merged idea has no page, so the `/docs/` feature list
+   stays complete.
+5. **My check.** On `verdict: approve`, I try it on its ports and run `/taste`.
    Then I merge from root (`git merge feat/<idea>`), run
    `scripts/sync-worktrees.sh`, and `scripts/orch/retire.sh <idea>`.
 

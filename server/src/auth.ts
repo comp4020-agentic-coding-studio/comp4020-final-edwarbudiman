@@ -59,7 +59,7 @@ export const USERNAME_RE = /^[a-z0-9_-]{3,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // a user's board lives at /<username>, so these would collide with the app's own pages
-const RESERVED_USERNAMES = new Set(["settings", "stats", "login", "logout", "signup", "readme", "api", "assets", "healthz", "admin", "help", "about", "new"]);
+const RESERVED_USERNAMES = new Set(["settings", "stats", "login", "logout", "signup", "readme", "docs", "api", "assets", "healthz", "admin", "help", "about", "new"]);
 
 export function normaliseUsername(raw: unknown): string {
   if (typeof raw !== "string") throw new HttpError(400, "username is required");
