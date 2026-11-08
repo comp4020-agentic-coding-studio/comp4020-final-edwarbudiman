@@ -18,6 +18,10 @@ Not rejected. The owner chose to wait. Ask before building.
 
 2026-11-09. From note-sidebar's decide conversation: the more proof checkboxes a user's notes have checked, the more benefit that user gets. The owner said to "just park the idea for later development". It builds on note-sidebar's creator-only proof checkbox, and may connect to job-board. Reopen if: note-sidebar's checkbox has shipped and the owner asks for it.
 
+### done-notifications
+
+2026-11-09. From note-sidebar's decide conversation: tell a note's creator when someone else sets that note to done, "so they can easily visit now", then check who finished it and tick proof. The owner asked to park it. It depends on note-sidebar (per-user status, creator-only proof). Reopen if: note-sidebar has shipped and the owner asks for it.
+
 ## Rejected
 
 <!-- ## <idea-name>, date, reason, what would change our mind. -->
