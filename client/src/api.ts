@@ -10,8 +10,13 @@ export interface Me {
 
 export type Color = "yellow" | "pink" | "blue" | "green" | "orange" | "purple";
 export const COLORS: Color[] = ["yellow", "pink", "blue", "green", "orange", "purple"];
-export const STATUSES = ["todo", "doing", "done"] as const;
-export type Status = (typeof STATUSES)[number];
+/** A person's own status on a note; null is "none" and shows nothing. */
+export type SideStatus = "progress" | "done";
+export const SIDE_STATUS_NAMES: Record<SideStatus, string> = { progress: "on progress", done: "done" };
+/** none → on progress → done, then back to none. */
+export const nextSideStatus = (s: SideStatus | null): SideStatus | null => (s === null ? "progress" : s === "progress" ? "done" : null);
+export const prevSideStatus = (s: SideStatus | null): SideStatus | null => (s === null ? "done" : s === "done" ? "progress" : null);
+export const COMMENT_MAX = 500;
 export const LABEL_MAX = 24;
 export const LABELS_PER_NOTE = 5;
 
@@ -32,12 +37,38 @@ export interface Note {
   z: number;
   visibility: "public" | "private";
   labels: string[];
-  status: Status;
   version: number;
   createdAt: number;
   updatedAt: number;
   canEdit: boolean;
   canMove: boolean;
+  // the back side, as this viewer sees it
+  myStatus: SideStatus | null;
+  proof: boolean;
+  commentCount: number;
+  doneCount: number;
+  progressCount: number;
+  needsProof: boolean;
+}
+
+export type SideSummary = Pick<Note, "myStatus" | "proof" | "commentCount" | "doneCount" | "progressCount" | "needsProof">;
+
+export interface SideComment {
+  id: number;
+  author: string;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+  mine: boolean;
+  canDelete: boolean;
+}
+
+export interface SideData {
+  proof: boolean;
+  myStatus: SideStatus | null;
+  counts: { done: number; progress: number };
+  people?: { name: string; status: SideStatus; at: number }[]; // the note's creator only
+  comments: SideComment[];
 }
 
 export interface BoardInfo {
