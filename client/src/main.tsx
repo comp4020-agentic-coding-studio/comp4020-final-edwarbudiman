@@ -12,10 +12,20 @@ import { Link, SessionContext, navigate, usePath } from "./router.tsx";
 import "./styles.css";
 
 /** App pages that sit at the top level next to users' boards (signup reserves these names). */
-const PAGES = new Set(["settings", "stats", "login", "signup", "readme"]);
+const PAGES = new Set(["settings", "stats", "login", "signup", "readme", "docs"]);
+
+/** Pages the server renders itself (README and the docs site), not the SPA. */
+const SERVER_PAGE = /^\/(readme|docs)(\/|$)/;
 
 function App() {
   const path = usePath();
+  const serverPage = SERVER_PAGE.test(path);
+
+  // if the SPA ever lands on a server page (a navigate(), popstate or a dev
+  // server that served index.html), load it for real instead of showing a board
+  useEffect(() => {
+    if (serverPage) location.replace(location.pathname + location.search + location.hash);
+  }, [serverPage]);
   const [me, setMe] = useState<Me | null | undefined>(undefined);
 
   useEffect(() => {
@@ -40,6 +50,7 @@ function App() {
     if (redirect) navigate(redirect, true);
   }, [redirect]);
 
+  if (serverPage) return null; // the effect above is loading the server page
   if (me === undefined) return <div className="loading">Loading…</div>;
 
   if (!me) {
