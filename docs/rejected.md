@@ -20,7 +20,7 @@ Not rejected. The owner chose to wait. Ask before building.
 
 ### done-notifications
 
-2026-11-09. From note-sidebar's decide conversation: tell a note's creator when someone else sets that note to done, "so they can easily visit now", then check who finished it and tick proof. The owner asked to park it. It depends on note-sidebar (per-user status, creator-only proof). Reopen if: note-sidebar has shipped and the owner asks for it.
+2026-11-09. From note-sidebar's decide conversation: tell a note's creator when someone else sets that note to done, "so they can easily visit now", then check who finished it and tick proof. The owner asked to park it. It depends on note-sidebar (per-user status, creator-only proof). Once proof is ticked, later "done" notifications should be quieter than before it's ticked. Reopen if: note-sidebar has shipped and the owner asks for it.
 
 ## Rejected
 
