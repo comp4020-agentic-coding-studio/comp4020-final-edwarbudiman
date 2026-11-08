@@ -13,6 +13,7 @@
     "check": "pnpm typecheck && pnpm check:docs && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
     "check:docs": "node scripts/check-docs.ts",
+    "docs:version": "node scripts/docs-version.ts",
     "test": "vitest run"
   },
   "devDependencies": {

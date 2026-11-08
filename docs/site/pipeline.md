@@ -7,7 +7,7 @@ order: 2
 
 ![Post-its moving through research, decide, spike, build and review](/docs/assets/pipeline.png)
 
-Every feature since week 10 has been built by Claude Code agents running side by side in [Herdr](https://herdr.dev). I'm the owner: I make every product call, try every spike and finished feature myself, and do every merge.
+Every feature since week 10 has been built by Claude Code agents running side by side in [Herdr](https://herdr.dev). Each role has its own page under [Roles](/docs/roles/). I'm the owner: I make every product call, try every spike and finished feature myself, and do every merge.
 
 ## One idea, one workspace
 
@@ -36,7 +36,7 @@ If the reviewer asks for changes, a *fresh* builder fixes the blockers and a fre
 
 ## Shipping a feature
 
-When I merge a feature, its docs page has to exist. `pnpm check:docs` fails if a merged `feat/<idea>` has no `docs/site/features/<idea>.md`, so the feature list on this site can't fall behind the app.
+When I merge a feature, its docs page has to exist, and a release that changes what users can do gets a new docs version (`pnpm docs:version v1.1 "1.1" "what changed"`). `pnpm check:docs` fails if a merged `feat/<idea>` has no `docs/site/features/<idea>.md`, so the feature list on this site can't fall behind the app.
 
 ## Where the ideas came from
 
