@@ -3,7 +3,8 @@
 // needs a feature page in docs/site/features/ whose front matter says
 // `idea: <slug>`, and every image or video a feature page names has to exist
 // in docs/readme-assets/. This keeps the /docs/ feature list in step with what
-// has shipped. Rejected ideas are skipped.
+// has shipped. Rejected ideas are skipped, and so is an idea whose Done line
+// says "no feature page" (tooling or docs work that users never see).
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -40,7 +41,7 @@ const state = existsSync("docs/orchestration/state.md") ? readFileSync("docs/orc
 const done = state.split(/^## Done$/m)[1] ?? "";
 for (const line of done.split("\n")) {
   const m = line.match(/^- `?([\w-]+)`?,\s*(.*)$/);
-  if (!m || /rejected/i.test(m[2])) continue;
+  if (!m || /rejected|no feature page/i.test(m[2])) continue;
   if (!ideasWithPages.has(m[1])) {
     fail(`${m[1]} is merged (state.md, Done) but no ${FEATURES}/*.md has "idea: ${m[1]}"`);
   }
