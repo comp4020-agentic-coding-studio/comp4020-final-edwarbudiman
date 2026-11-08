@@ -75,7 +75,7 @@ After the owner's taste check on an approved feature, they merge from root (`git
 
 When the reviewer writes `verdict: approve`, spawn the documenter straight away (`spawn.sh <idea> documenter`, then `wait.sh <idea> documenter`). It opens in a new tab of the idea's workspace, writes the feature's `/docs/` page, records a real demo, and commits both on `feat/<idea>`. Only then show the owner the taste gate: the feature on its ports and its page at `/docs/features/<slug>/`. If the documenter reports `status: blocked` because a step doesn't work, treat it as a fix round.
 
-A merged idea with no page fails `pnpm check:docs` on `main` (it reads Done in `state.md`), so never ask the owner to merge before the documenter has reported `status: done`. When a merge changes what users can do, remind the owner they can cut a docs version with `pnpm docs:version`.
+A merged idea with no page fails `pnpm check:docs` on `main` (it reads Done in `state.md`), so never ask the owner to merge before the documenter has reported `status: done`. An idea users never see (tooling, docs) skips the documenter: after `retire.sh`, append `, no feature page (<why>)` to its Done line. When a merge changes what users can do, remind the owner they can cut a docs version with `pnpm docs:version`.
 
 `retire.sh` is the whole cleanup: it stops the servers on the idea's ports, removes both worktrees, deletes the local branches and `feat/<idea>` on origin, moves the idea to Done in `state.md`, and closes the idea's Herdr workspace with every agent tab. It closes the workspace last, so the idea's lead can run it once the owner says the merge is in. Commit `state.md` on main afterwards.
 

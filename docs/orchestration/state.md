@@ -10,7 +10,7 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
-- `note-sidebar` — review (reviewer-2) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
+- `note-sidebar` — docs (documenter-1) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
 
 ## Decisions
 
@@ -21,7 +21,7 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 ## To-do for the owner
 
 <!-- Decide sessions, taste gates (with the /taste reminder), merges, blocked dialogs. -->
-- `note-sidebar`: reviewer-1 asked for changes (the +N pill is clipped in crowd rows); builder-2 fixing, then reviewer-2, then the owner's last check, PR and merge.
+- `note-sidebar`: reviewer-2 approved (c1df776); documenter writing the docs page. Then the owner's last check (/taste), PR and merge.
 
 ## Reflections
 
@@ -37,4 +37,4 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 
 <!-- Idea, merge commit or "rejected", date. -->
 - note-arrows, PR #2 merge a84d8fd, 2026-11-09
-- docs-site, merge 6818997, 2026-11-09
+- docs-site, merge 6818997, 2026-11-09, no feature page (the docs site itself)
