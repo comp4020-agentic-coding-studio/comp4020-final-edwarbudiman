@@ -10,7 +10,8 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
-- `note-sidebar` — docs (documenter-1) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
+- `note-sidebar` — ready to merge (PR #4) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
+- `label-sections` — decide (lead-1, short decide: small idea) — drop per-note labels; a toolbar tool draws named label sections on the board that group the notes inside them
 
 ## Decisions
 
@@ -21,7 +22,7 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 ## To-do for the owner
 
 <!-- Decide sessions, taste gates (with the /taste reminder), merges, blocked dialogs. -->
-- `note-sidebar`: reviewer-2 approved (c1df776); documenter writing the docs page. Then the owner's last check (/taste), PR and merge.
+- `note-sidebar`: ready to merge. PR #4 is open. Merge it (or `git merge feat/note-sidebar` from root), then run scripts/sync-worktrees.sh and scripts/orch/retire.sh note-sidebar. It ships migration 7, which wipes statuses on deploy.
 
 ## Reflections
 
