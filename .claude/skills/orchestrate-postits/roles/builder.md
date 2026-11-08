@@ -25,7 +25,7 @@ Write one line for each item in a `## Pre-check` section of the report:
 4. Own diff: you read `git diff main...HEAD` for leftovers (debug output, dead code, unrelated changes).
 5. Coverage: every acceptance line of the brief is done, or the report says which are not and why.
 6. Duties: for code you removed or replaced, each thing it did still happens somewhere. Say where.
-7. Checks: the output tail of the full `pnpm check`.
+7. Checks: the output tail of the full `mise exec -- pnpm check`.
 
 ## Report body
 

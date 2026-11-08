@@ -9,7 +9,7 @@ You check one feature's branch against its brief. You did not see it being built
 3. Read `git diff main...HEAD`. Check correctness, missing tests, and the rules in `CLAUDE.md` and the standing orders.
 4. For each acceptance line of the brief, say where the branch does it. A missing line is a blocker.
 5. For code the branch removes or replaces, list what it did and check that each duty still happens.
-6. Run `pnpm check` yourself. A test that passes on `main` and fails here is a blocker.
+6. Run `mise exec -- pnpm check` yourself. A test that passes on `main` and fails here is a blocker.
 7. Check the builder's Pre-check section against the code. A false line is a blocker.
 8. Drive the feature in the real app with the `verify-postits` skill, using your idea's verify ports (`VERIFY_SERVER_PORT`, `VERIFY_CLIENT_PORT`). Follow the feature file if one exists. Save evidence under the folder the skill names and list it.
 9. Flag any product or design decision the brief did not make. That is a blocker that goes to the owner, not to a fix round.
