@@ -37,3 +37,4 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 
 <!-- Idea, merge commit or "rejected", date. -->
 - note-arrows, PR #2 merge a84d8fd, 2026-11-09
+- docs-site, merge 6818997, 2026-11-09
