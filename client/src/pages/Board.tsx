@@ -46,11 +46,21 @@ interface Rect {
   y1: number;
 }
 /** A copied note, positioned relative to the top-left of what was copied. */
+/** An arrow from this copied note to another copied note (by its place in the clip's items). */
+interface ClipArrow {
+  to: number;
+  fromSide: Side | null;
+  fromT: number | null;
+  toSide: Side | null;
+  toT: number | null;
+  color: Color | null;
+}
 interface ClipItem {
   text: string;
   color: Color;
   visibility: Note["visibility"];
   labels?: string[];
+  arrows?: ClipArrow[];
   dx: number;
   dy: number;
 }
@@ -60,12 +70,16 @@ interface Clip {
   x: number; // where the copied group's top-left was
   y: number;
 }
-type Tool = "select" | "hand";
+type Tool = "select" | "hand" | "arrow";
+type Side = "top" | "right" | "bottom" | "left";
+interface Arrow { id: number; from: number; to: number; fromSide?: Side | null; fromT?: number | null; toSide?: Side | null; toT?: number | null; color?: Color | null }
+interface Snap { note: number; side: Side; t: number; x: number; y: number }
+type EndSpec = { n: Note; side: Side | null; t: number | null } | { p: { x: number; y: number } };
 interface Peer {
   sid: string;
   name: string | null; // null: anonymous
 }
-type NewNote = { text: string; color: Color; visibility: Note["visibility"]; labels: string[]; x: number; y: number };
+type NewNote = { text: string; color: Color; visibility: Note["visibility"]; labels: string[]; x: number; y: number; arrows?: ClipArrow[] };
 
 type Gesture =
   | { mode: "none" }
@@ -73,6 +87,8 @@ type Gesture =
   | { mode: "pinch"; ids: [number, number]; dist: number; mid: { x: number; y: number }; view: View }
   | { mode: "marquee"; pointerId: number; x0: number; y0: number; base: number[] }
   | { mode: "pending"; pointerId: number; noteId: number; sx: number; sy: number; touch: boolean; timer: number | null; pan: { ox: number; oy: number }; collapse: boolean }
+  | { mode: "arrow"; pointerId: number; from: number }
+  | { mode: "arrowEnd"; pointerId: number; id: number; end: "from" | "to" }
   | { mode: "drag"; pointerId: number; ids: number[]; sx: number; sy: number; origs: Record<number, { x: number; y: number }>; moved: boolean; lastSent: number };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -107,6 +123,51 @@ function readFilter(key: string): Set<string> {
   }
 }
 
+/** A line between two note centres, cut off at the note edges. */
+function edgeLine(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  if (!dx && !dy) return null;
+  const t = Math.min(NOTE_W / 2 / (Math.abs(dx) || 1e-9), NOTE_H / 2 / (Math.abs(dy) || 1e-9));
+  if (t >= 0.5) return null; // notes overlap: nothing to draw
+  return { x1: a.x + dx * t, y1: a.y + dy * t, x2: b.x - dx * t, y2: b.y - dy * t };
+}
+const SNAP = 36; // world px: how close to a note's edge the arrow tip is pulled onto it
+const anchorPt = (n: { x: number; y: number }, side: Side, t: number) =>
+  side === "top" ? { x: n.x + t * NOTE_W, y: n.y }
+  : side === "bottom" ? { x: n.x + t * NOTE_W, y: n.y + NOTE_H }
+  : side === "left" ? { x: n.x, y: n.y + t * NOTE_H }
+  : { x: n.x + NOTE_W, y: n.y + t * NOTE_H };
+/** Nearest point on a note's border to (px,py); dist is 0 when the point is inside the note. */
+function borderSnap(n: { x: number; y: number }, px: number, py: number): Omit<Snap, "note"> & { dist: number } {
+  const cx = clamp(px, n.x, n.x + NOTE_W), cy = clamp(py, n.y, n.y + NOTE_H);
+  const inside = cx === px && cy === py;
+  let side: Side;
+  if (inside) {
+    const d = { left: px - n.x, right: n.x + NOTE_W - px, top: py - n.y, bottom: n.y + NOTE_H - py };
+    side = (Object.keys(d) as Side[]).reduce((a, b) => (d[b] < d[a] ? b : a));
+  } else {
+    const ox = Math.max(n.x - px, px - (n.x + NOTE_W), 0), oy = Math.max(n.y - py, py - (n.y + NOTE_H), 0);
+    side = ox >= oy ? (px < n.x ? "left" : "right") : py < n.y ? "top" : "bottom";
+  }
+  const t = side === "top" || side === "bottom" ? clamp((px - n.x) / NOTE_W, 0, 1) : clamp((py - n.y) / NOTE_H, 0, 1);
+  const pt = anchorPt(n, side, t);
+  return { side, t, x: pt.x, y: pt.y, dist: inside ? 0 : Math.hypot(px - cx, py - cy) };
+}
+function edgeToward(n: { x: number; y: number }, q: { x: number; y: number }) {
+  const c = { x: n.x + NOTE_W / 2, y: n.y + NOTE_H / 2 };
+  const dx = q.x - c.x, dy = q.y - c.y;
+  if (!dx && !dy) return c;
+  const t = Math.min(1, NOTE_W / 2 / (Math.abs(dx) || 1e-9), NOTE_H / 2 / (Math.abs(dy) || 1e-9));
+  return { x: c.x + dx * t, y: c.y + dy * t };
+}
+const endPoint = (e: EndSpec) => ("p" in e ? e.p : e.side && e.t != null ? anchorPt(e.n, e.side, e.t) : null);
+const endCentre = (e: EndSpec) => ("p" in e ? e.p : { x: e.n.x + NOTE_W / 2, y: e.n.y + NOTE_H / 2 });
+function head(g: { x1: number; y1: number; x2: number; y2: number }) {
+  const ang = Math.atan2(g.y2 - g.y1, g.x2 - g.x1), L = 14, W = 6;
+  const bx = g.x2 - Math.cos(ang) * L, by = g.y2 - Math.sin(ang) * L;
+  return `${g.x2},${g.y2} ${bx - Math.sin(ang) * W},${by + Math.cos(ang) * W} ${bx + Math.sin(ang) * W},${by - Math.cos(ang) * W}`;
+}
+
 /** Typing somewhere the board's shortcuts shouldn't fire. */
 function isTyping(t: EventTarget | null): boolean {
   return t instanceof HTMLElement && !!t.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], .menu-pop");
@@ -129,6 +190,36 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const [newColor, setNewColor] = useState<Color>("yellow");
   const [tool, setTool] = useState<Tool>("select");
   const [spaceHeld, setSpaceHeld] = useState(false);
+  const [arrows, setArrows] = useState<Arrow[]>([]);
+  const [arrowSel, setArrowSel] = useState<number | null>(null);
+  const [draft, setDraftArrow] = useState<{ from: number; sSide: Side; sT: number; x: number; y: number; snap: Snap | null } | null>(null);
+  const [endDrag, setEndDrag] = useState<{ id: number; end: "from" | "to"; x: number; y: number; snap: Snap | null } | null>(null);
+  const [hoverArrow, setHoverArrow] = useState<number | null>(null);
+  const hoverTimer = useRef<number | null>(null);
+  const hoverOn = (id: number) => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current); setHoverArrow(id); };
+  const hoverOff = () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current); hoverTimer.current = window.setTimeout(() => setHoverArrow(null), 150); };
+  const arrowSelRef = useRef<number | null>(null);
+  arrowSelRef.current = arrowSel;
+  const selectArrow = (id: number | null) => {
+    arrowSelRef.current = id;
+    setArrowSel(id);
+  };
+  const addArrow = (from: number, to: number, fa: { side: Side; t: number }, ta: { side: Side; t: number }) => {
+    const bid = boardRef.current?.id;
+    if (bid === undefined || from < 0 || to < 0) return;
+    api<{ arrow: Arrow }>("POST", `/api/boards/${bid}/arrows`, { from, to, fromSide: fa.side, fromT: fa.t, toSide: ta.side, toT: ta.t })
+      .then((r) => setArrows((cur) => (cur.some((a) => a.id === r.arrow.id) ? cur : [...cur, r.arrow])))
+      .catch((err) => flash(err instanceof ApiError ? err.message : "couldn't draw that arrow"));
+  };
+  const removeArrow = (id: number) => {
+    const before = arrowsRef.current.find((a) => a.id === id);
+    setArrows((cur) => cur.filter((a) => a.id !== id));
+    api("DELETE", `/api/arrows/${id}`).catch((err) => {
+      if (err instanceof ApiError && err.status === 404) return; // already gone
+      if (before) setArrows((cur) => (cur.some((a) => a.id === id) ? cur : [...cur, before]));
+      flash(err instanceof ApiError ? err.message : "couldn't delete that arrow");
+    });
+  };
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const filterKey = `filter:${kind}/${slug}`;
@@ -151,6 +242,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const editingRef = useRef(editing);
   const locksRef = useRef(locks);
   const toolRef = useRef(tool);
+  const arrowsRef = useRef<Arrow[]>([]);
+  const draftRef = useRef<{ from: number; sSide: Side; sT: number; x: number; y: number; snap: Snap | null } | null>(null);
+  const boardRef = useRef<BoardInfo | null>(null);
   const spaceRef = useRef(false);
   const sockRef = useRef<LiveSocket | null>(null);
   const gestureRef = useRef<Gesture>({ mode: "none" });
@@ -179,6 +273,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   editingRef.current = editing;
   locksRef.current = locks;
   toolRef.current = tool;
+  arrowsRef.current = arrows;
+  draftRef.current = draft;
+  boardRef.current = board;
   filterRef.current = filter;
   followingRef.current = following;
   const phaseRef = useRef(phase);
@@ -205,6 +302,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     const next = new Set(ids);
     selectedRef.current = next;
     setSelected(next);
+    arrowSelRef.current = null; // notes and an arrow are never selected together
+    setArrowSel(null);
   }, []);
 
   const unselect = useCallback((id: number) => {
@@ -230,8 +329,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const load = useCallback(
     async (initial: boolean) => {
       try {
-        const r = await api<{ board: BoardInfo; notes: Note[] }>("GET", `/api/boards/${kind}/${encodeURIComponent(slug)}`);
+        const r = await api<{ board: BoardInfo; notes: Note[]; arrows?: Arrow[] }>("GET", `/api/boards/${kind}/${encodeURIComponent(slug)}`);
         setBoard(r.board);
+        setArrows(r.arrows ?? []);
         setGate(null);
         if (initial) refreshSidebar(); // opening it just caught you up
         const map: Record<number, Note> = {};
@@ -414,8 +514,24 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         setNotes((prev) => ({ ...prev, [note.id]: mine && prev[note.id] ? { ...note, x: prev[note.id].x, y: prev[note.id].y } : note }));
         return;
       }
+      case "arrow:upsert": {
+        const arrow = m.arrow as Arrow;
+        setArrows((prev) => (prev.some((a) => a.id === arrow.id) ? prev.map((a) => (a.id === arrow.id ? arrow : a)) : [...prev, arrow]));
+        return;
+      }
+      case "arrow:delete": {
+        const id = m.id as number;
+        setArrows((prev) => (prev.some((a) => a.id === id) ? prev.filter((a) => a.id !== id) : prev));
+        if (arrowSelRef.current === id) {
+          arrowSelRef.current = null;
+          setArrowSel(null);
+        }
+        return;
+      }
       case "note:delete": {
         const id = m.id as number;
+        // its arrows go with it (the server deleted them, or hides them from us now)
+        setArrows((prev) => (prev.some((a) => a.from === id || a.to === id) ? prev.filter((a) => a.from !== id && a.to !== id) : prev));
         setNotes((prev) => {
           if (!prev[id]) return prev;
           const next = { ...prev };
@@ -674,6 +790,19 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       return next;
     });
     select(made.map((n) => n.id));
+    // the copies get their own arrows, between the copies only
+    if (board.kind === "user" && board.isOwner) {
+      const copies = results.map((r) => (r.status === "fulfilled" ? r.value.note.id : null));
+      for (const [i, it] of items.entries()) {
+        for (const a of it.arrows ?? []) {
+          const from = copies[i], to = copies[a.to];
+          if (from === null || to === null || to === undefined) continue;
+          api<{ arrow: Arrow }>("POST", `/api/boards/${board.id}/arrows`, { from, to, fromSide: a.fromSide, fromT: a.fromT, toSide: a.toSide, toT: a.toT, color: a.color })
+            .then((r) => setArrows((cur) => (cur.some((x) => x.id === r.arrow.id) ? cur : [...cur, r.arrow])))
+            .catch(() => {});
+        }
+      }
+    }
     const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
     if (failed) flash(failed.reason instanceof ApiError ? failed.reason.message : "couldn't add every note");
   }
@@ -696,6 +825,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     const before = notesRef.current[id];
     if (!before) return;
     if (id < 0) pendingText.current.set(id, ""); // deleted for real once the server has it
+    const touching = arrowsRef.current.filter((a) => a.from === id || a.to === id);
+    if (touching.length) setArrows((cur) => cur.filter((a) => a.from !== id && a.to !== id)); // the server deletes them with the note
     setNotes((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -708,6 +839,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       await api("DELETE", `/api/notes/${id}`);
     } catch (err) {
       setNotes((prev) => ({ ...prev, [id]: before }));
+      if (touching.length) setArrows((cur) => [...cur, ...touching.filter((t) => !cur.some((a) => a.id === t.id))]);
       flash(err instanceof ApiError ? err.message : "couldn't delete that");
     }
   }
@@ -758,6 +890,19 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   }
 
   function recolourSelection(c: Color) {
+    const aid = arrowSelRef.current;
+    if (aid !== null) {
+      // an arrow is selected: the swatches colour it instead
+      const cur = arrowsRef.current.find((a) => a.id === aid);
+      if (cur && cur.color !== c) {
+        setArrows((list) => list.map((a) => (a.id === aid ? { ...a, color: c } : a)));
+        api("PATCH", `/api/arrows/${aid}`, { color: c }).catch((err) => {
+          setArrows((list) => list.map((a) => (a.id === aid ? cur : a)));
+          flash(err instanceof ApiError ? err.message : "couldn't recolour that arrow");
+        });
+      }
+      return;
+    }
     setNewColor(c);
     for (const id of selectedRef.current) {
       const n = notesRef.current[id];
@@ -788,9 +933,14 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     if (list.length === 0) return null;
     const x = Math.min(...list.map((n) => n.x));
     const y = Math.min(...list.map((n) => n.y));
+    const index = new Map(list.map((n, i) => [n.id, i]));
+    const arrowsOut = (n: Note): ClipArrow[] =>
+      arrowsRef.current
+        .filter((a) => a.from === n.id && index.has(a.to))
+        .map((a) => ({ to: index.get(a.to)!, fromSide: a.fromSide ?? null, fromT: a.fromT ?? null, toSide: a.toSide ?? null, toT: a.toT ?? null, color: a.color ?? null }));
     return {
       text: list.map((n) => n.text).join("\n\n"),
-      items: list.map((n) => ({ text: n.text, color: n.color, visibility: n.visibility, labels: n.labels, dx: n.x - x, dy: n.y - y })),
+      items: list.map((n) => ({ text: n.text, color: n.color, visibility: n.visibility, labels: n.labels, arrows: arrowsOut(n), dx: n.x - x, dy: n.y - y })),
       x,
       y,
     };
@@ -808,13 +958,13 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     pasteSpot.current = pasteSpot.current?.key === key ? { key, n: pasteSpot.current.n + 1 } : { key, n: 0 };
     x += pasteSpot.current.n * PASTE_STEP;
     y += pasteSpot.current.n * PASTE_STEP;
-    void createMany(items.map((i) => ({ text: i.text, color: i.color, visibility: i.visibility, labels: i.labels ?? filterLabels(), x: x + i.dx, y: y + i.dy })));
+    void createMany(items.map((i) => ({ text: i.text, color: i.color, visibility: i.visibility, labels: i.labels ?? filterLabels(), arrows: i.arrows, x: x + i.dx, y: y + i.dy })));
   }
 
   function duplicateSelection() {
     const clip = clipFromSelection();
     if (!clip) return;
-    void createMany(clip.items.map((i) => ({ text: i.text, color: i.color, visibility: i.visibility, labels: i.labels ?? [], x: clip.x + i.dx + PASTE_STEP, y: clip.y + i.dy + PASTE_STEP })));
+    void createMany(clip.items.map((i) => ({ text: i.text, color: i.color, visibility: i.visibility, labels: i.labels ?? [], arrows: i.arrows, x: clip.x + i.dx + PASTE_STEP, y: clip.y + i.dy + PASTE_STEP })));
   }
 
   // ---------------------------------------------------------------- keyboard
@@ -948,11 +1098,19 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       }
       case "Delete":
       case "Backspace":
+        if (arrowSelRef.current) {
+          e.preventDefault();
+          removeArrow(arrowSelRef.current);
+          selectArrow(null);
+          return;
+        }
         if (!sel.size) return;
         e.preventDefault();
         deleteSelection();
         return;
       case "Escape":
+        selectArrow(null);
+        if (toolRef.current === "arrow") setTool("select");
         stopFollowing();
         select([]);
         if (document.activeElement instanceof HTMLElement && document.activeElement.closest(".note")) viewportRef.current?.focus();
@@ -965,6 +1123,10 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       case "h":
       case "H":
         setTool("hand");
+        return;
+      case "a":
+      case "A":
+        if (boardRef.current?.isOwner && boardRef.current.kind === "user") setTool("arrow");
         return;
       case "l":
       case "L":
@@ -1101,7 +1263,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     return true;
   }
 
-  const panning = (e: ReactPointerEvent) => e.pointerType === "touch" || e.button === 1 || toolRef.current === "hand" || spaceRef.current;
+  const panning = (e: ReactPointerEvent) => e.pointerType === "touch" || e.button === 1 || toolRef.current === "hand" || toolRef.current === "arrow" || spaceRef.current;
 
   function onBackgroundDown(e: ReactPointerEvent, fromNote = false) {
     if (e.pointerType === "mouse" && e.button !== 0 && e.button !== 1) return;
@@ -1125,6 +1287,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     e.stopPropagation();
     if (editing === note.id) return; // let the textarea have it
     if (e.pointerType === "mouse" && e.button !== 0) return onBackgroundDown(e, true);
+    if (toolRef.current === "arrow" && e.pointerType !== "touch" && boardRef.current?.isOwner && boardRef.current.kind === "user") return startArrow(e, note.id);
     if (panning(e) && e.pointerType !== "touch") return onBackgroundDown(e, true);
     pointerFocus.current = true;
     window.setTimeout(() => (pointerFocus.current = false), 0);
@@ -1162,6 +1325,44 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     }
     gestureRef.current = g;
   }
+
+  function startArrow(e: ReactPointerEvent, from: number) {
+    e.stopPropagation();
+    e.preventDefault();
+    viewportRef.current?.setPointerCapture(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    gestureRef.current = { mode: "arrow", pointerId: e.pointerId, from };
+    const w = toWorld(e.clientX, e.clientY);
+    const src = notesRef.current[from];
+    const b = borderSnap(src, w.x, w.y);
+    setDraftArrow({ from, sSide: b.side, sT: b.t, x: w.x, y: w.y, snap: null });
+    selectArrow(null);
+  }
+  /** Grab an existing arrow's end to move it. */
+  function startEnd(e: ReactPointerEvent, id: number, end: "from" | "to") {
+    e.stopPropagation();
+    e.preventDefault();
+    viewportRef.current?.setPointerCapture(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    gestureRef.current = { mode: "arrowEnd", pointerId: e.pointerId, id, end };
+    const w = toWorld(e.clientX, e.clientY);
+    select([]);
+    selectArrow(id);
+    setEndDrag({ id, end, x: w.x, y: w.y, snap: snapAt(w.x, w.y, null) });
+  }
+  /** The note border point the tip is pulled to, if the pointer is on or near a note. */
+  function snapAt(x: number, y: number, exclude: number | null): Snap | null {
+    let best: (Snap & { dist: number; z: number }) | null = null;
+    for (const n of Object.values(notesRef.current)) {
+      if (!shown(n) || n.id === exclude) continue;
+      const b = borderSnap(n, x, y);
+      if (b.dist > SNAP) continue;
+      if (!best || b.dist < best.dist || (b.dist === best.dist && n.z > best.z)) best = { note: n.id, side: b.side, t: b.t, x: b.x, y: b.y, dist: b.dist, z: n.z };
+    }
+    return best;
+  }
+  const noteAt = (x: number, y: number) =>
+    Object.values(notesRef.current).filter((n) => shown(n) && x >= n.x && x <= n.x + NOTE_W && y >= n.y && y <= n.y + NOTE_H).sort((a, b) => b.z - a.z)[0];
 
   /** Drag everything selected that this user may move. */
   function startDrag(pointerId: number, clientX: number, clientY: number) {
@@ -1233,6 +1434,18 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         }
         return;
       }
+      case "arrow": {
+        if (g.pointerId !== e.pointerId) return;
+        const w = toWorld(e.clientX, e.clientY);
+        setDraftArrow((d) => (d ? { ...d, x: w.x, y: w.y, snap: snapAt(w.x, w.y, g.from) } : d));
+        return;
+      }
+      case "arrowEnd": {
+        if (g.pointerId !== e.pointerId) return;
+        const w = toWorld(e.clientX, e.clientY);
+        setEndDrag({ id: g.id, end: g.end, x: w.x, y: w.y, snap: snapAt(w.x, w.y, null) });
+        return;
+      }
       case "drag": {
         if (g.pointerId !== e.pointerId) return;
         const w = toWorld(e.clientX, e.clientY);
@@ -1269,6 +1482,40 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     if (("pointerId" in g && g.pointerId !== e.pointerId) || g.mode === "none") return;
     gestureRef.current = { mode: "none" };
     if (g.mode === "marquee") setMarquee(null);
+    if (g.mode === "arrow") {
+      const d = draftRef.current;
+      setDraftArrow(null);
+      if (e.type === "pointerup" && d) {
+        const w = toWorld(e.clientX, e.clientY);
+        const hit = snapAt(w.x, w.y, g.from);
+        if (hit && !arrowsRef.current.some((a) => a.from === g.from && a.to === hit.note)) {
+          addArrow(g.from, hit.note, { side: d.sSide, t: d.sT }, { side: hit.side, t: hit.t });
+        }
+      }
+      return;
+    }
+    if (g.mode === "arrowEnd") {
+      setEndDrag(null);
+      if (e.type === "pointerup") {
+        const w = toWorld(e.clientX, e.clientY);
+        const hit = snapAt(w.x, w.y, null);
+        const cur = arrowsRef.current.find((a) => a.id === g.id);
+        if (hit && cur) {
+          const other = g.end === "from" ? cur.to : cur.from;
+          const f = g.end === "from" ? hit.note : cur.from, t = g.end === "from" ? cur.to : hit.note;
+          const dup = arrowsRef.current.some((a) => a.id !== cur.id && a.from === f && a.to === t);
+          if (hit.note !== other && !dup) {
+            const patch = g.end === "from" ? { from: hit.note, fromSide: hit.side, fromT: hit.t } : { to: hit.note, toSide: hit.side, toT: hit.t };
+            setArrows((list) => list.map((a) => (a.id === cur.id ? { ...a, ...patch } : a)));
+            api("PATCH", `/api/arrows/${cur.id}`, patch).catch((err) => {
+              setArrows((list) => list.map((a) => (a.id === cur.id ? cur : a)));
+              flash(err instanceof ApiError ? err.message : "couldn't move that arrow");
+            });
+          }
+        }
+      }
+      return;
+    }
     if (g.mode === "pan" && !g.moved && !g.fromNote && e.type === "pointerup") select([]);
     if (g.mode === "pending") {
       if (g.timer) window.clearTimeout(g.timer);
@@ -1400,7 +1647,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const hiddenCount = filter.size ? sorted.filter((n) => !shown(n)).length : 0;
   const filterName = filter.size === 1 ? (labelMap.get([...filter][0])?.label ?? [...filter][0]) : `${filter.size} labels`;
   const grid = 24 * view.s;
-  const selColor = selNotes.length && selNotes.every((n) => n.color === selNotes[0].color) ? selNotes[0].color : selNotes.length ? null : newColor;
+  const selColor = arrowSel !== null ? (arrows.find((a) => a.id === arrowSel)?.color ?? notes[arrows.find((a) => a.id === arrowSel)?.from ?? -1]?.color ?? null) : selNotes.length && selNotes.every((n) => n.color === selNotes[0].color) ? selNotes[0].color : selNotes.length ? null : newColor;
   const groupBox =
     selNotes.length > 1
       ? {
@@ -1414,7 +1661,35 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     const n = norm(r);
     return { left: n.x0 * view.s + view.ox, top: n.y0 * view.s + view.oy, width: (n.x1 - n.x0) * view.s, height: (n.y1 - n.y0) * view.s };
   };
+  /** Where an arrow's line runs now: saved anchors, or the end being dragged, or centre to centre for old rows. */
+  const arrowGeom = (a: Arrow) => {
+    const A = notes[a.from], B = notes[a.to];
+    if (!A || !B) return null;
+    let e1: EndSpec = { n: A, side: a.fromSide ?? null, t: a.fromT ?? null };
+    let e2: EndSpec = { n: B, side: a.toSide ?? null, t: a.toT ?? null };
+    if (endDrag && endDrag.id === a.id) {
+      const e: EndSpec = endDrag.snap && notes[endDrag.snap.note] ? { n: notes[endDrag.snap.note], side: endDrag.snap.side, t: endDrag.snap.t } : { p: { x: endDrag.x, y: endDrag.y } };
+      if (endDrag.end === "from") e1 = e; else e2 = e;
+    }
+    let p1 = endPoint(e1), p2 = endPoint(e2);
+    if (!p1 && !p2 && "n" in e1 && "n" in e2) {
+      // old row, no anchors: centre to centre, A↔B nudged apart
+      let ca = endCentre(e1), cb = endCentre(e2);
+      if (arrows.some((o) => o.from === a.to && o.to === a.from)) {
+        const dx = cb.x - ca.x, dy = cb.y - ca.y, len = Math.hypot(dx, dy) || 1, off = 7;
+        const ox = (-dy / len) * off, oy = (dx / len) * off;
+        ca = { x: ca.x + ox, y: ca.y + oy };
+        cb = { x: cb.x + ox, y: cb.y + oy };
+      }
+      return edgeLine(ca, cb);
+    }
+    if (!p1 && "n" in e1) p1 = edgeToward(e1.n, p2 ?? endCentre(e2));
+    if (!p2 && "n" in e2) p2 = edgeToward(e2.n, p1 ?? endCentre(e1));
+    if (!p1 || !p2) return null;
+    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  };
   const grabbing = tool === "hand" || spaceHeld;
+  const canArrow = !!board?.isOwner && board.kind === "user";
   const flat = phase === "board"; // the board's own tools only show on the flat board
 
   return (
@@ -1422,7 +1697,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       <div className="board-body">
         <div
           ref={viewportRef}
-          className={`viewport${grabbing ? " panning" : ""}`}
+          className={`viewport${grabbing ? " panning" : ""}${tool === "arrow" ? " arrowing" : ""}`}
           tabIndex={0}
           role="application"
           aria-label={`${title}: infinite canvas. Arrow keys pan, plus and minus zoom, N adds a note, Tab moves between notes, question mark lists shortcuts.`}
@@ -1435,6 +1710,36 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           onDoubleClick={onBackgroundDoubleClick}
         >
           <div className="world" style={{ transform: `translate(${view.ox}px, ${view.oy}px) scale(${view.s})` }}>
+            <svg className="arrow-layer" width="1" height="1" overflow="visible">
+              {arrows.map((a) => {
+                const geom = arrowGeom(a);
+                if (!geom) return null;
+                const A = notes[a.from];
+                const on = arrowSel === a.id;
+                return (
+                  <g key={a.id} className={`arrow${on ? " on" : ""}`} onPointerEnter={() => hoverOn(a.id)} onPointerLeave={hoverOff}>
+                    <line x1={geom.x1} y1={geom.y1} x2={geom.x2} y2={geom.y2} className="arrow-hit"
+                      onPointerDown={(e) => { if (!canArrow) return; e.stopPropagation(); select([]); selectArrow(a.id); viewportRef.current?.focus(); }} />
+                    <line x1={geom.x1} y1={geom.y1} x2={geom.x2} y2={geom.y2} className="arrow-line"
+                      style={a.color ? { stroke: `color-mix(in srgb, var(--c-${a.color}) 70%, #55555f)` } : undefined} />
+                    <polygon points={head(geom)} style={{ fill: `var(--c-${a.color ?? A.color})` }} className="arrow-head" />
+                  </g>
+                );
+              })}
+              {draft && notes[draft.from] && (() => {
+                const p1 = anchorPt(notes[draft.from], draft.sSide, draft.sT);
+                const p2 = draft.snap ?? { x: draft.x, y: draft.y };
+                const g = { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+                return (
+                  <g>
+                    <line className="arrow-line draft" {...g} />
+                    <polygon points={head(g)} className="arrow-head" style={{ fill: draft.snap ? `var(--c-${notes[draft.from].color})` : "#fff" }} />
+                    {draft.snap && <circle cx={draft.snap.x} cy={draft.snap.y} r={5} className="arrow-snap" />}
+                  </g>
+                );
+              })()}
+              {endDrag?.snap && <circle cx={endDrag.snap.x} cy={endDrag.snap.y} r={5} className="arrow-snap" />}
+            </svg>
             {sorted.map((n) => (
               <NoteCard
                 key={tempKeys.current.get(n.id) ?? n.id}
@@ -1446,6 +1751,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
                 showAuthor={n.author !== me.username}
                 filteredOut={!shown(n)}
                 isBoardOwnersView={!!board?.isOwner}
+                nub={canArrow && tool === "select"}
+                onNub={(e) => { if (e.pointerType !== "touch") startArrow(e, n.id); }}
                 onPointerDown={(e) => onNoteDown(e, n)}
                 onFocus={() => {
                   if (!pointerFocus.current && !selectedRef.current.has(n.id)) select([n.id]);
@@ -1454,6 +1761,20 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
                 onFinishEdit={(text) => void finishEdit(n.id, text)}
               />
             ))}
+            {canArrow && (
+              <svg className="arrow-handles" width="1" height="1" overflow="visible">
+                {arrows.filter((a) => a.id === hoverArrow || a.id === endDrag?.id).map((a) => {
+                  const geom = arrowGeom(a);
+                  if (!geom) return null;
+                  return (
+                    <g key={a.id} onPointerEnter={() => hoverOn(a.id)} onPointerLeave={hoverOff}>
+                      <circle cx={geom.x1} cy={geom.y1} r={7} className="arrow-handle" onPointerDown={(e) => startEnd(e, a.id, "from")} />
+                      <circle cx={geom.x2} cy={geom.y2} r={7} className="arrow-handle" onPointerDown={(e) => startEnd(e, a.id, "to")} />
+                    </g>
+                  );
+                })}
+              </svg>
+            )}
           </div>
           {groupBox && <div className="group-box" style={toScreen(groupBox)} aria-hidden />}
           {marquee && <div className="marquee" style={toScreen(marquee)} aria-hidden />}
@@ -1624,6 +1945,14 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           </svg>
           <span className="sr-only">Select</span>
         </button>
+        {canArrow && (
+          <button className={`tool${tool === "arrow" ? " on" : ""}`} aria-pressed={tool === "arrow"} onClick={() => setTool("arrow")} title="Arrow: drag from one note onto another (A). Esc to stop">
+            <svg viewBox="0 0 20 20" aria-hidden>
+              <path d="M4 16 15 5m0 0H8.5M15 5v6.5" />
+            </svg>
+            <span className="sr-only">Arrow</span>
+          </button>
+        )}
         <span className="tool-sep" aria-hidden />
         <button className="tool add" onClick={createAtCentre} title="Add a note (N)">
           <svg viewBox="0 0 20 20" aria-hidden>
@@ -1632,7 +1961,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           <span>Note</span>
         </button>
         <span className="tool-sep" aria-hidden />
-        <div className="swatches" role="radiogroup" aria-label={selNotes.length ? "Colour of the selected notes" : "Colour for new notes"}>
+        <div className="swatches" role="radiogroup" aria-label={arrowSel !== null ? "Colour of the selected arrow" : selNotes.length ? "Colour of the selected notes" : "Colour for new notes"}>
           {COLORS.map((c) => (
             <button
               key={c}
@@ -1740,6 +2069,7 @@ const SHORTCUTS: [string, string][] = [
   ["Move the selection", "Arrow keys (Shift for bigger steps)"],
   ["Move around", "Scroll, hold Space and drag, or H"],
   ["Select tool", "V"],
+  ["Arrow tool (your own board)", "A, drag note onto note; Esc stops"],
   ["Zoom", `${mod} scroll, + and −, 0 resets`],
   ["Show all notes", "Shift 1"],
   ["Clear the selection", "Esc"],
@@ -1896,6 +2226,8 @@ function NoteCard(props: {
   filteredOut: boolean;
   lock: LockInfo | undefined;
   isBoardOwnersView: boolean;
+  nub: boolean;
+  onNub: (e: ReactPointerEvent) => void;
   onPointerDown: (e: ReactPointerEvent) => void;
   onFocus: () => void;
   onDoubleClick: () => void;
@@ -1903,6 +2235,7 @@ function NoteCard(props: {
 }) {
   const { note, selected, editing, lock, dragging } = props;
   const [draft, setDraft] = useState(note.text);
+  const [side, setSide] = useState<Side>("right"); // which edge the nub sits on: the one nearest the mouse
   const done = useRef(false);
   useEffect(() => {
     if (editing) {
@@ -1931,6 +2264,13 @@ function NoteCard(props: {
       aria-label={label}
       aria-roledescription="note"
       onPointerDown={props.onPointerDown}
+      onPointerMove={(e) => {
+        if (!props.nub || e.pointerType !== "mouse") return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2), dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+        const next = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "bottom" : "top";
+        if (next !== side) setSide(next);
+      }}
       onFocus={props.onFocus}
       onDoubleClick={(e) => {
         e.stopPropagation();
@@ -1989,6 +2329,7 @@ function NoteCard(props: {
           )}
         </span>
       </footer>
+      {props.nub && !editing && <span className={`nub ${side}`} title="Drag onto another note to draw an arrow" onPointerDown={props.onNub} />}
       {heldByOther && <div className="held-by">{lock!.holder} is moving this</div>}
     </div>
   );

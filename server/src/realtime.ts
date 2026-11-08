@@ -6,8 +6,8 @@ import { join as joinPath } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import type { User } from "./auth.ts";
 import { getUser, sessionUser } from "./auth.ts";
-import type { Board, NoteRow } from "./boards.ts";
-import { canEnter, canMove, canSee, getBoard, getNote, hooks, markSeen, noteOut } from "./boards.ts";
+import type { ArrowRow, Board, NoteRow } from "./boards.ts";
+import { arrowOut, arrowsOfNote, canEnter, canSeeArrow, canMove, canSee, getBoard, getNote, hooks, markSeen, noteOut } from "./boards.ts";
 import { config } from "./config.ts";
 import type { DB } from "./db.ts";
 import { sameOrigin } from "./http.ts";
@@ -436,6 +436,21 @@ export function attachRealtime(server: Server, database: DB): void {
       locks.delete(note.id);
     }
     toViewers(board, note, () => ({ type: "note:delete", id: note.id }));
+  };
+  // Arrows go through the same rule as notes: only to viewers who can see both
+  // ends. A viewer who can't (any more) is told to drop it.
+  const arrowTo = (c: Client, board: Board, arrow: ArrowRow) =>
+    send(c, canSeeArrow(db, board, arrow, c.user.id) ? { type: "arrow:upsert", arrow: arrowOut(arrow) } : { type: "arrow:delete", id: arrow.id });
+  hooks.arrowUpserted = (board, arrow) => {
+    for (const c of rooms.get(board.id) ?? []) arrowTo(c, board, arrow);
+  };
+  hooks.arrowDeleted = (board, arrow) => {
+    // everyone gets it: for someone who never saw the arrow it's a no-op
+    for (const c of rooms.get(board.id) ?? []) send(c, { type: "arrow:delete", id: arrow.id });
+  };
+  hooks.noteArrowsChanged = (board, note) => {
+    const arrows = arrowsOfNote(db, note.id);
+    for (const c of rooms.get(board.id) ?? []) for (const a of arrows) arrowTo(c, board, a);
   };
   hooks.lockHolder = (noteId) => locks.get(noteId)?.userId ?? null;
 }
