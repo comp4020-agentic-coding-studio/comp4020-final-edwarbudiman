@@ -13,16 +13,25 @@ Each line ends with the idea it came from and the date.
 - The arrow nub on all four sides, "up down left right": "use mouse position relating to the center of the note for showing the nub." (note-arrows, 2026-11-05)
 - Spike-2's nub on four sides, two lines for A↔B, and arrows saved in the DB: "it already done so far." (note-arrows, 2026-11-05)
 - An arrow with "some kind of magnet like feels that will stick to the nearest post-it": "fluid, but magnetic enough, so it can land to any line on the post it." (note-arrows, 2026-11-05; built and liked, 2026-11-09)
+- A ✓ in place of the symbol when proof is ticked: "i like the idea of changing the symbol into checkmark when it's being ticked" (note-sidebar, 2026-11-09)
+- An open button that's "part of the post-it, blend and like a window, but on the corner has button." (note-sidebar, 2026-11-09)
+- Animated motion for the sidebar and button: "add some animating the motion, so it will have fluid more" (note-sidebar, 2026-11-09)
+- Status as only three states: "none (not showing anything), on progress, or done" (note-sidebar, 2026-11-09)
+- Only the comments scroll, with the comment input "on the very bottom", going "from bottom to up for the newest to old, like youtube live comment. the design should accommodate that." (note-sidebar, 2026-11-09)
 
 ## Dislikes
 
 - A→B plus B→A "creating one line with two arrows". Want a "distinct line between those, so it will create two line with two arrow, with slight gap for it." (note-arrows, 2026-11-05)
 - An arrow that points "kinda auto" and is "static": "if the arrow already connect, the pointing arrow cannot be moved at all." (note-arrows, 2026-11-05)
+- An open button that's hard to see. Rejected both ?v=a (edge tab) and ?v=b (hover corner icon): "i prefer something that clearly can be seen." (note-sidebar, 2026-11-09)
+- The tick "not automatically change to my other tab (i checked it using two tab)" (note-sidebar, 2026-11-09)
+- The sidebar breaking when there are many comments: "if comments section long enough then it starts to break." (note-sidebar, 2026-11-09)
 
 ## Log
 
 <!-- Newest first: date, idea, what was tried, the owner's reaction in their words. -->
 
+- 2026-11-09, note-sidebar, spike-1 (?v=a edge tab, ?v=b hover corner icon, client-only fakes): "1. i think we need to add some animating the motion, so it will have fluid more 2. not v=a or v=b, i prefer something that clearly can be seen. But my taste here is i believe we can make some button like, like it's part of the post-it, blend and like a window, but on the corner has button. 3. i like the idea of changing the symbol into checkmark when it's being ticked, but it's not automatically change to my other tab ( i checked it using two tab ) 4. status would be only, none (not showing anything), on progress, or done". Then, with a screenshot of the sidebar overflowing: "if comments section long enough then it starts to break. i want the scroll section would be for the comments, and for comment input should be placed on the very bottom, and it will go from bottom to up for the newest to old, like youtube live comment. the design should accommodate that." → re-spike.
 - 2026-11-09, note-arrows, build (reviewer-1 approved, PR #2): "i already liked everything" → merged.
 - 2026-11-05, note-arrows, spike-2: "alright, so it already done so far. for /taste, i believe i also has feedback, where the arrow pointing kinda auto, i want it to have some kind of magnet like feels that will stick to the nearest post-it, but not as static as now, because if the arrow already connect, the pointing arrow cannot be moved at all, i rather want it to be fluid, but magnetic enough, so it can land to any line on the post it." → re-spike.
 - 2026-11-05, note-arrows, spike-1: "the nub could be on 4 direction, up down left right, for now the nub only appears on the right side, use mouse position relating to the center of the note for showing the nub. i also tried note a arrowing note b, then note b arrowing note a, where it creating one line with two arrows, i want it to have distinct line between those, so it will create two line with two arrow, with slight gap for it. And for the arrow, i also want it to be saved on DB, so dont just rely on localStorage" → re-spike.
