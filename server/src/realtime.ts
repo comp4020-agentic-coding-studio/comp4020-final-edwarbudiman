@@ -424,10 +424,20 @@ export function attachRealtime(server: Server, database: DB): void {
   hooks.noteUpserted = (board, note) => {
     for (const c of rooms.get(board.id) ?? []) {
       // a note that just turned private disappears for those who can't see it
-      if (canSee(board, note, c.user.id)) send(c, { type: "note:upsert", note: noteOut(board, note, c.user.id) });
+      if (canSee(board, note, c.user.id)) send(c, { type: "note:upsert", note: noteOut(db, board, note, c.user.id) });
       else send(c, { type: "note:delete", id: note.id });
     }
     if (note.version === 1) activity(board, note);
+  };
+  // Status, proof or a comment changed. Each viewer gets their own summary
+  // (myStatus, needsProof differ per person) and a nudge to refetch the open
+  // sidebar. Both go through the same canSee rule as notes.
+  hooks.sideChanged = (board, note) => {
+    for (const c of rooms.get(board.id) ?? []) {
+      if (!canSee(board, note, c.user.id)) continue;
+      send(c, { type: "note:upsert", note: noteOut(db, board, note, c.user.id) });
+      send(c, { type: "note:side", id: note.id });
+    }
   };
   hooks.noteDeleted = (board, note) => {
     const lock = locks.get(note.id);

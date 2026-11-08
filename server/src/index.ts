@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { changePassword, login, logout, publicUser, requireUser, seedDemo, signup, updateMe } from "./auth.ts";
 import { channelBoard, createArrow, createChannel, createNote, deleteArrow, deleteNote, updateArrow, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
+import { addComment, deleteComment, editComment, readSide, setProof, setStatus } from "./side.ts";
 import { config } from "./config.ts";
 import { openDb } from "./db.ts";
 import { HttpError, readJson, sameOrigin, sendJson } from "./http.ts";
@@ -52,6 +53,28 @@ route("PATCH", /^\/api\/notes\/(\d+)$/, async (req, res, [id]) => {
 route("DELETE", /^\/api\/notes\/(\d+)$/, (req, res, [id]) => {
   deleteNote(db, requireUser(db, req), Number(id));
   sendJson(res, 200, { ok: true });
+});
+
+route("PUT", /^\/api\/notes\/(\d+)\/status$/, async (req, res, [id]) => {
+  const user = requireUser(db, req);
+  sendJson(res, 200, { note: setStatus(db, user, Number(id), await readJson(req)) });
+});
+route("PUT", /^\/api\/notes\/(\d+)\/proof$/, async (req, res, [id]) => {
+  const user = requireUser(db, req);
+  sendJson(res, 200, { note: setProof(db, user, Number(id), await readJson(req)) });
+});
+route("GET", /^\/api\/notes\/(\d+)\/side$/, (req, res, [id]) => sendJson(res, 200, readSide(db, requireUser(db, req), Number(id))));
+route("POST", /^\/api\/notes\/(\d+)\/comments$/, async (req, res, [id]) => {
+  const user = requireUser(db, req);
+  sendJson(res, 201, { comment: addComment(db, user, Number(id), await readJson(req)) });
+});
+route("PATCH", /^\/api\/comments\/(\d+)$/, async (req, res, [id]) => {
+  const user = requireUser(db, req);
+  sendJson(res, 200, { comment: editComment(db, user, Number(id), await readJson(req)) });
+});
+route("DELETE", /^\/api\/comments\/(\d+)$/, (req, res, [id]) => {
+  deleteComment(db, requireUser(db, req), Number(id));
+  res.writeHead(204).end();
 });
 
 route("POST", /^\/api\/boards\/(\d+)\/arrows$/, async (req, res, [id]) => {

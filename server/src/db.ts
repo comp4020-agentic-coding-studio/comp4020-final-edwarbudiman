@@ -110,6 +110,30 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX note_arrows_board ON note_arrows(board_id);
   `,
+  // 7: the note's back side. Status becomes per person (no row = none), with a
+  // creator-only proof tick and comments. The old shared notes.status column
+  // stays but nothing reads or writes it; its values are wiped.
+  `
+  UPDATE notes SET status = 'todo';
+  CREATE TABLE note_status (
+    note_id     INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status      TEXT NOT NULL CHECK (status IN ('progress','done')),
+    updated_at  INTEGER NOT NULL,
+    PRIMARY KEY (note_id, user_id)
+  );
+  ALTER TABLE notes ADD COLUMN proof INTEGER NOT NULL DEFAULT 0 CHECK (proof IN (0, 1));
+  ALTER TABLE notes ADD COLUMN proof_at INTEGER;
+  CREATE TABLE note_comments (
+    id          INTEGER PRIMARY KEY,
+    note_id     INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    author_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text        TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL
+  );
+  CREATE INDEX note_comments_note ON note_comments(note_id, created_at);
+  `,
 ];
 
 export function openDb(dataDir: string): DB {
