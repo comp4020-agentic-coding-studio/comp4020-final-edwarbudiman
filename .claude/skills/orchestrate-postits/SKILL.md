@@ -68,7 +68,9 @@ Verdict `changes`: append a `## Fix round` section to the brief that points at t
 
 ### Merge
 
-After the owner's taste check on an approved feature, they merge from root (`git merge feat/<idea>`), then run `scripts/sync-worktrees.sh` and `scripts/orch/retire.sh <idea>`. A rejected idea goes in `docs/rejected.md` first, then `retire.sh <idea> --rejected`.
+After the owner's taste check on an approved feature, they merge from root (`git merge feat/<idea>`, or merge the PR on GitHub and `git pull` in root), then run `scripts/sync-worktrees.sh` and `scripts/orch/retire.sh <idea>`. A rejected idea goes in `docs/rejected.md` first, then `retire.sh <idea> --rejected`.
+
+`retire.sh` is the whole cleanup: it stops the servers on the idea's ports, removes both worktrees, deletes the local branches and `feat/<idea>` on origin, moves the idea to Done in `state.md`, and closes the idea's Herdr workspace with every agent tab. It closes the workspace last, so the idea's lead can run it once the owner says the merge is in. Commit `state.md` on main afterwards.
 
 ### Reflect (stage 6)
 
