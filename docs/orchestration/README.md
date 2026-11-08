@@ -81,7 +81,7 @@ reviewer shares one Chrome.
 | `scripts/orch/wait.sh <idea> <role> [timeout-ms]` | Waits until the worker settles. Exit 0 with a one-line summary when its report has this round's token, 2 when it is blocked on a dialog, 3 when it stopped without a report. |
 | `scripts/orch/resume.sh <idea> <role\|role-N>` | Brings back a worker whose Claude session died (Herdr restart, closed pane) with its whole conversation, keeping its round, token and report path. Uses the session id that `spawn.sh` saved in `reports/<label>.session`, or finds it from the spawn prompt in the worktree's transcripts. After a restart, resume each idea's lead and it resumes its own workers. |
 | `scripts/orch/status.sh` | One row per idea: its stage, latest worker, Herdr state, result, branch head, and whether the review is stale. |
-| `scripts/orch/retire.sh <idea> [--rejected]` | Closes the workspace, removes both worktrees, deletes both branches. Refuses unless `feat/<idea>` is merged, or the idea is in `rejected.md` with `--rejected`. |
+| `scripts/orch/retire.sh <idea> [--rejected]` | The full cleanup: stops servers on the idea's ports, removes both worktrees, deletes local and remote branches, moves the idea to Done in `state.md`, then closes its Herdr workspace and agent tabs. Refuses unless `feat/<idea>` is merged, or the idea is in `rejected.md` with `--rejected`. |
 
 Models can be changed with `ORCH_<ROLE>_MODEL` (for example
 `ORCH_BUILDER_MODEL`), and the permission mode with `ORCH_PERMISSION_MODE`

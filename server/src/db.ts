@@ -91,6 +91,25 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE notes ADD COLUMN status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo','doing','done','approved'));
   `,
+  // 6: note arrows, one-way links between two notes of a user board. Each end
+  // may be anchored on its note's border (a side plus 0..1 along it); both
+  // columns of an anchor are null (centre to centre) or both set.
+  `
+  CREATE TABLE note_arrows (
+    id          INTEGER PRIMARY KEY,
+    board_id    INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    from_note   INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    to_note     INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    from_side   TEXT CHECK (from_side IN ('top','right','bottom','left')),
+    from_t      REAL CHECK (from_t IS NULL OR (from_t >= 0 AND from_t <= 1)),
+    to_side     TEXT CHECK (to_side IN ('top','right','bottom','left')),
+    to_t        REAL CHECK (to_t IS NULL OR (to_t >= 0 AND to_t <= 1)),
+    color       TEXT,
+    CHECK ((from_side IS NULL) = (from_t IS NULL) AND (to_side IS NULL) = (to_t IS NULL)),
+    UNIQUE (from_note, to_note)
+  );
+  CREATE INDEX note_arrows_board ON note_arrows(board_id);
+  `,
 ];
 
 export function openDb(dataDir: string): DB {

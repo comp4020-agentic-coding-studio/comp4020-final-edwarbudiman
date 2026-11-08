@@ -10,27 +10,32 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
-- `note-arrows` — taste (spike-3) — re-style notes with arrows that show order and which note affects which (dry run of the new pipeline)
-- `note-sidebar` — decide — right sidebar per note with optional Proof (text or image) and Comments; single click opens it
+- `note-arrows` — merged (PR #2, a84d8fd), waiting on cleanup — owner-only arrows between notes with magnetic, movable ends
+- `note-sidebar` — taste (spike-2) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
 
 ## Decisions
 
 <!-- One line each. Mark the ones the orchestrator settled with
      "(decided by orchestrator)" so the owner can overrule them. -->
-- note-sidebar: only a click without movement opens the sidebar; images shrunk client-side to ~200 KB, ~5 proof items per note; a comment/proof marker on the note; bottom sheet on phones (decided by orchestrator)
+- note-sidebar: superseded by the owner's decision.md (2026-11-09). Spike builds two open-button variants behind ?v=a / ?v=b (decided by orchestrator)
 
 ## To-do for the owner
 
 <!-- Decide sessions, taste gates (with the /taste reminder), merges, blocked dialogs. -->
-- `note-arrows`: spike-2 ready at http://localhost:5188 — try it and run /taste in the lead-1 tab of workspace `feat/note-arrows`. Its lead now runs this idea.
-- `note-sidebar`: research ready (3 shapes, recommends A delivered text-first). Decide conversation in the lead-1 tab of workspace `feat/note-sidebar`.
+- `note-arrows`: PR #2 merged on GitHub (a84d8fd). In root: `git pull` (merge origin/main into your local main), then `scripts/sync-worktrees.sh` and `scripts/orch/retire.sh note-arrows`. Also delete the remote branch `feat/note-arrows`.
+- `note-sidebar`: spike-2 ready at http://localhost:5198/ (alice / bob, spike-pass-123). Try it, then run /taste in the lead-1 tab of workspace `feat/note-sidebar`.
 
 ## Reflections
 
 <!-- After each merged or rejected idea: date, idea, what to change, and where it was changed. -->
 - 2026-11-05, note-arrows (in progress): WebSearch/WebFetch can't reach reddit.com, so the researcher had no first-hand Reddit quotes. To fix: give the researcher a working Reddit route (e.g. old.reddit.com .json via curl, or the Chrome tools), then update roles/researcher.md.
 - 2026-11-05, note-arrows: the first researcher started without a project brief; added docs/project-context.md and pointed every role at it.
+- 2026-11-09, note-arrows: research (~7 min) and the open-ended grilling in decide (~21 min) took longer than the idea needed; the three spikes settled the design anyway (magnetic ends, colour). Owner: "all the things quite simple, but with matt pocock grill it's quite long question so far, also for researching, it takes a lot of time as well, for this simple task". To change: a small/large size at seed; small ideas get light research (5–8 sources, apps + repo, ~10 min cap) and a short decide (one shapes table, then at most 3–5 batched questions each with a recommended default) in roles/researcher.md, roles/decider.md, new-idea.sh. Not done yet.
+- 2026-11-09, note-arrows: a re-spike's notes file (.claude/orch/<idea>/spike-<n>-notes.md) isn't named in the spiker's prompt, so the lead sent the path by hand twice. To change: spawn.sh adds it to the prompt when it exists. Not done yet.
+- 2026-11-09, note-arrows: sync-worktrees.sh refuses while root has uncommitted changes, so taste commits on main didn't reach the worktrees during the idea.
+- 2026-11-09, note-arrows — **for the main pilot:** add a Herdr cleanup step for finished ideas. Owner: "we need to clean the herdr once it's already merged and everything done … something we need to add for the pipeline". After merge, nothing stops the idea's dev/spike servers, closes its tabs, or removes the remote branch. retire.sh only closes the workspace when run with HERDR_ENV=1, and only removes local worktrees/branches. Wanted: one command (retire.sh, or a merge step in the lead) that, once the PR is merged, kills processes on the idea's ports (build, spike, verify), closes the workspace and its agent tabs, removes worktrees and local + remote branches, and marks the idea done in state.md. Who runs it (lead, after the owner's merge, or main) is the pilot's call. Done 2026-11-09: retire.sh now does all of this (workspace closes last, so the lead or main can run it); SKILL.md Merge and README updated.
 
 ## Done
 
 <!-- Idea, merge commit or "rejected", date. -->
+- note-arrows, PR #2 merge a84d8fd, 2026-11-09

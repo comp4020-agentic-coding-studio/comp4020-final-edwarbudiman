@@ -37,3 +37,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Note status](./note-status.md) covers stepping a note through to do, doing, done with S / Shift+S or the Status button, and seeing it live.
 - [Live cursors and presence](./live-cursors-presence.md) covers seeing another user's cursor and following them.
 - [Channels and chat](./channels-chat.md) covers joining a channel, posting a chat message, and sidebar unread counts.
+- [Note arrows](./note-arrows.md) covers drawing, snapping, moving, recolouring and deleting arrows between notes, what a visitor sees, and copy/paste.

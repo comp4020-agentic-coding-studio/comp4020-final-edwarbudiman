@@ -136,6 +136,10 @@ board_members(board_id, user_id, PRIMARY KEY(board_id, user_id))
 notes(id, board_id, author_id, text, color, x REAL, y REAL, z INTEGER,
       visibility CHECK(IN ('public','private')), version INTEGER,
       created_at, updated_at)
+note_arrows(id, board_id, from_note, to_note, from_side NULL, from_t NULL,
+            to_side NULL, to_t NULL, color NULL, UNIQUE(from_note, to_note))
+-- (migration 6; note-arrows. Owner-only, user boards only; side is
+-- top|right|bottom|left, t is 0..1 along it; both null = centre to centre.)
 -- not in the DB: presence, cursors, drag locks (server memory, tiny);
 -- chat (never on the server)
 ```
@@ -151,6 +155,9 @@ note:move {id,x,y}   (while locked)     note:move {id,x,y}
 note:delete {id}                        note:delete {id}
 lock:acquire {id} / lock:release {id}   lock {id, holder|"someone"|null}
 cursor {x,y}  (≤ 20/s)                  cursor {sid, name|null, x, y}
+(REST: POST /api/boards/:id/arrows,    arrow:upsert {arrow}  (only to viewers who
+ PATCH/DELETE /api/arrows/:id)           can see both notes; else arrow:delete)
+                                        arrow:delete {id}
 chat:send {text}                        chat:msg {id,author,ts,text,sig}
 chat:history:reply {to, lines[]}        chat:history:request {to}  (to one peer)
                                         chat:history {lines[]}     (to newcomer)

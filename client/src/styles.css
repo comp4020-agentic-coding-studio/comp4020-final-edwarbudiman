@@ -1889,3 +1889,24 @@ button.board-title svg {
     max-width: 34vw;
   }
 }
+
+/* Note arrows: an SVG layer under the notes, a hover nub on each note, end handles on a hovered arrow */
+.arrow-layer { position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none; }
+.arrow-line { stroke: #8a8a93; stroke-width: 1.6; fill: none; }
+.arrow-line.draft { stroke-dasharray: 5 4; }
+.arrow-head { stroke: #8a8a93; stroke-width: 0.8; stroke-linejoin: round; }
+.arrow-hit { stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+.arrow.on .arrow-line { stroke: var(--accent); stroke-width: 2.4; }
+.nub { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 1.5px solid #8a8a93; cursor: crosshair; opacity: 0; transition: opacity 120ms; z-index: 2; }
+.note:hover .nub { opacity: 1; }
+.nub::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #8a8a93; }
+.nub.right { right: -9px; top: 50%; margin-top: -8px; }
+.nub.left { left: -9px; top: 50%; margin-top: -8px; }
+.nub.top { top: -9px; left: 50%; margin-left: -8px; }
+.nub.bottom { bottom: -9px; left: 50%; margin-left: -8px; }
+@media (hover: none) { .nub { display: none; } } /* drawing is desktop only */
+.viewport.arrowing, .viewport.arrowing .note { cursor: crosshair; }
+.arrow-handles { position: absolute; left: 0; top: 0; z-index: 1000000; pointer-events: none; }
+.arrow-handle { fill: #fff; stroke: var(--accent); stroke-width: 2; pointer-events: all; cursor: grab; }
+.arrow-handle:hover { fill: var(--accent); }
+.arrow-snap { fill: none; stroke: var(--accent); stroke-width: 2; }
