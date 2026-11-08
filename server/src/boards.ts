@@ -38,6 +38,20 @@ export interface NoteRow {
   updated_at: number;
 }
 
+export interface ArrowRow {
+  id: number;
+  board_id: number;
+  from_note: number;
+  to_note: number;
+  from_side: Side | null;
+  from_t: number | null;
+  to_side: Side | null;
+  to_t: number | null;
+  color: string | null;
+}
+export type Side = "top" | "right" | "bottom" | "left";
+export const SIDES: readonly Side[] = ["top", "right", "bottom", "left"];
+
 export const COLORS = ["yellow", "pink", "blue", "green", "orange", "purple"] as const;
 export const STATUSES = ["todo", "doing", "done"] as const;
 export type Status = (typeof STATUSES)[number];
@@ -54,6 +68,10 @@ export const hooks = {
   noteUpserted: (_board: Board, _note: NoteRow): void => {},
   noteDeleted: (_board: Board, _note: NoteRow): void => {},
   lockHolder: (_noteId: number): number | null => null,
+  arrowUpserted: (_board: Board, _arrow: ArrowRow): void => {},
+  arrowDeleted: (_board: Board, _arrow: ArrowRow): void => {},
+  /** A note's visibility changed: re-send (or retract) the arrows touching it, per viewer. */
+  noteArrowsChanged: (_board: Board, _note: NoteRow): void => {},
 };
 
 const BOARD_COLS = "b.id, b.kind, b.owner_id, u.username AS owner_name, b.slug, b.name, b.visibility, b.key_hash, b.description, b.created_at";
@@ -159,7 +177,8 @@ export function userBoard(db: DB, user: User, username: string) {
   const board = boardBySlug(db, "user", username.toLowerCase());
   if (!board) throw new HttpError(404, "no such user");
   markSeen(db, board.id, user.id);
-  return { board: boardOut(db, board, user), notes: listNotes(db, board, user) };
+  const notes = listNotes(db, board, user);
+  return { board: boardOut(db, board, user), notes, arrows: listArrows(db, board, notes) };
 }
 
 export function channelBoard(db: DB, user: User, slug: string) {
@@ -174,7 +193,7 @@ export function channelBoard(db: DB, user: User, slug: string) {
     }
   }
   markSeen(db, board.id, user.id);
-  return { board: boardOut(db, board, user), notes: listNotes(db, board, user) };
+  return { board: boardOut(db, board, user), notes: listNotes(db, board, user), arrows: [] };
 }
 
 export function directory(db: DB) {
@@ -339,6 +358,7 @@ export function updateNote(db: DB, user: User, noteId: number, body: Record<stri
     fields: changed.join(","),
   });
   hooks.noteUpserted(board, updated);
+  if (changed.includes("visibility")) hooks.noteArrowsChanged(board, updated);
   return noteOut(board, updated, user.id);
 }
 
@@ -350,6 +370,137 @@ export function deleteNote(db: DB, user: User, noteId: number): void {
   db.prepare("DELETE FROM notes WHERE id = ?").run(note.id);
   logAction(user.username, "note.delete", { board: board.id, note: note.id });
   hooks.noteDeleted(board, note);
+}
+
+
+// ---------------------------------------------------------------- arrows
+
+// One-way links between two notes of a user board. Only the board's owner
+// draws, moves, recolours or deletes them; a visitor sees the ones whose two
+// notes they can see (the same rule as notes, so a private note's arrows
+// never leak). Channel boards have none.
+
+const ARROW_COLS = "id, board_id, from_note, to_note, from_side, from_t, to_side, to_t, color";
+
+export function arrowOut(r: ArrowRow) {
+  return { id: r.id, from: r.from_note, to: r.to_note, fromSide: r.from_side, fromT: r.from_t, toSide: r.to_side, toT: r.to_t, color: r.color };
+}
+
+export function getArrow(db: DB, id: number): ArrowRow | undefined {
+  return db.prepare(`SELECT ${ARROW_COLS} FROM note_arrows WHERE id = ?`).get(id) as ArrowRow | undefined;
+}
+
+export function arrowsOfNote(db: DB, noteId: number): ArrowRow[] {
+  return db.prepare(`SELECT ${ARROW_COLS} FROM note_arrows WHERE from_note = ? OR to_note = ?`).all(noteId, noteId) as unknown as ArrowRow[];
+}
+
+/** Can this viewer see both ends of the arrow? */
+export function canSeeArrow(db: DB, board: Board, arrow: ArrowRow, userId: number): boolean {
+  const a = getNote(db, arrow.from_note);
+  const b = getNote(db, arrow.to_note);
+  return !!a && !!b && canSee(board, a, userId) && canSee(board, b, userId);
+}
+
+function listArrows(db: DB, board: Board, visible: { id: number }[]) {
+  if (board.kind !== "user") return [];
+  const ids = new Set(visible.map((n) => n.id));
+  const rows = db.prepare(`SELECT ${ARROW_COLS} FROM note_arrows WHERE board_id = ? ORDER BY id`).all(board.id) as unknown as ArrowRow[];
+  return rows.filter((r) => ids.has(r.from_note) && ids.has(r.to_note)).map(arrowOut);
+}
+
+/** side and t together: both null/missing means "no anchor". */
+function parseAnchor(side: unknown, t: unknown, what: string): { side: Side | null; t: number | null } {
+  if ((side === undefined || side === null) && (t === undefined || t === null)) return { side: null, t: null };
+  if (typeof side !== "string" || !(SIDES as readonly string[]).includes(side) || typeof t !== "number" || !Number.isFinite(t) || t < 0 || t > 1) {
+    throw new HttpError(400, `${what} anchor must be a side (${SIDES.join(", ")}) and a position from 0 to 1`);
+  }
+  return { side: side as Side, t };
+}
+
+function noteIdOf(body: Record<string, unknown>, key: string): number {
+  const v = body[key];
+  if (typeof v !== "number" || !Number.isInteger(v)) throw new HttpError(400, `${key} must be a note id`);
+  return v;
+}
+
+/** The notes must exist on this board; a note elsewhere is a note that doesn't exist. */
+function arrowNote(db: DB, board: Board, id: number): NoteRow {
+  const n = getNote(db, id);
+  if (!n || n.board_id !== board.id) throw new HttpError(404, "no such note on this board");
+  return n;
+}
+
+export function createArrow(db: DB, user: User, boardId: number, body: Record<string, unknown>): { arrow: ReturnType<typeof arrowOut>; created: boolean } {
+  const board = getBoard(db, boardId);
+  if (!board || board.kind !== "user") throw new HttpError(404, "no such board");
+  if (board.owner_id !== user.id) throw new HttpError(403, "only the board's owner can draw arrows");
+  const from = noteIdOf(body, "from");
+  const to = noteIdOf(body, "to");
+  if (from === to) throw new HttpError(400, "an arrow can't point at its own note");
+  arrowNote(db, board, from);
+  arrowNote(db, board, to);
+  const fa = parseAnchor(body.fromSide, body.fromT, "from");
+  const ta = parseAnchor(body.toSide, body.toT, "to");
+  const color = body.color === undefined || body.color === null ? null : parseColor(body.color);
+  const existing = db.prepare(`SELECT ${ARROW_COLS} FROM note_arrows WHERE from_note = ? AND to_note = ?`).get(from, to) as ArrowRow | undefined;
+  if (existing) return { arrow: arrowOut(existing), created: false };
+  const r = db
+    .prepare("INSERT INTO note_arrows (board_id, from_note, to_note, from_side, from_t, to_side, to_t, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(board.id, from, to, fa.side, fa.t, ta.side, ta.t, color);
+  const row = getArrow(db, Number(r.lastInsertRowid))!;
+  logAction(user.username, "arrow.create", { board: board.id, arrow: row.id, from, to });
+  hooks.arrowUpserted(board, row);
+  return { arrow: arrowOut(row), created: true };
+}
+
+/** Owner-only access to an existing arrow. A visitor who can't see its notes gets a 404, not a hint it exists. */
+function arrowForWrite(db: DB, user: User, arrowId: number): { board: Board; arrow: ArrowRow } {
+  const arrow = getArrow(db, arrowId);
+  const board = arrow && getBoard(db, arrow.board_id);
+  if (!arrow || !board || board.kind !== "user") throw new HttpError(404, "no such arrow");
+  if (board.owner_id !== user.id) {
+    if (!canSeeArrow(db, board, arrow, user.id)) throw new HttpError(404, "no such arrow");
+    throw new HttpError(403, "only the board's owner can change arrows");
+  }
+  return { board, arrow };
+}
+
+/** Move an end along its note's border, re-target it, or recolour the arrow. */
+export function updateArrow(db: DB, user: User, arrowId: number, body: Record<string, unknown>) {
+  const { board, arrow } = arrowForWrite(db, user, arrowId);
+  const from = body.from === undefined ? arrow.from_note : noteIdOf(body, "from");
+  const to = body.to === undefined ? arrow.to_note : noteIdOf(body, "to");
+  if (from === to) throw new HttpError(400, "an arrow can't point at its own note");
+  arrowNote(db, board, from);
+  arrowNote(db, board, to);
+  // an end that moved to another note without a new anchor goes back to centre
+  const anchor = (k: "from" | "to", changed: boolean) => {
+    const sideKey = `${k}Side`;
+    const tKey = `${k}T`;
+    if (sideKey in body || tKey in body) return parseAnchor(body[sideKey], body[tKey], k);
+    return changed ? { side: null, t: null } : { side: arrow[`${k}_side`], t: arrow[`${k}_t`] };
+  };
+  const fa = anchor("from", from !== arrow.from_note);
+  const ta = anchor("to", to !== arrow.to_note);
+  const color = body.color === undefined ? arrow.color : body.color === null ? null : parseColor(body.color);
+  if (from !== arrow.from_note || to !== arrow.to_note) {
+    if (db.prepare("SELECT 1 FROM note_arrows WHERE from_note = ? AND to_note = ? AND id <> ?").get(from, to, arrow.id)) {
+      throw new HttpError(409, "that arrow already exists");
+    }
+  }
+  if (!["from", "to", "fromSide", "fromT", "toSide", "toT", "color"].some((k) => k in body)) throw new HttpError(400, "nothing to change");
+  db.prepare("UPDATE note_arrows SET from_note = ?, to_note = ?, from_side = ?, from_t = ?, to_side = ?, to_t = ?, color = ? WHERE id = ?").run(from, to, fa.side, fa.t, ta.side, ta.t, color, arrow.id);
+  const row = getArrow(db, arrow.id)!;
+  logAction(user.username, "arrow.update", { board: board.id, arrow: arrow.id });
+  hooks.arrowUpserted(board, row);
+  return arrowOut(row);
+}
+
+export function deleteArrow(db: DB, user: User, arrowId: number): void {
+  const { board, arrow } = arrowForWrite(db, user, arrowId);
+  db.prepare("DELETE FROM note_arrows WHERE id = ?").run(arrow.id);
+  logAction(user.username, "arrow.delete", { board: board.id, arrow: arrow.id });
+  hooks.arrowDeleted(board, arrow);
 }
 
 // ---------------------------------------------------------------- channels
