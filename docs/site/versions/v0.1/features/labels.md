@@ -2,7 +2,7 @@
 title: Labels and filter
 order: 3
 summary: Tag notes with labels, then show only the ones you care about right now.
-image: feature-labels.png
+image: feature-labels.webp
 ---
 
 # Labels and filter

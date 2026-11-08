@@ -4,7 +4,7 @@ order: 7
 tagline: Turns the brief into tested code and a docs page.
 model: Sonnet
 where: idea worktree
-avatar: avatars/builder.png
+avatar: avatars/builder.webp
 ---
 
 # Builder

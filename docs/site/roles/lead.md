@@ -4,7 +4,7 @@ order: 3
 tagline: The orchestrator for one idea, in that idea's workspace.
 model: Opus
 where: first tab of feat/<idea>
-avatar: avatars/lead.png
+avatar: avatars/lead.webp
 ---
 
 # Lead

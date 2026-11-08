@@ -4,7 +4,7 @@ order: 8
 tagline: Checks the branch with fresh eyes and drives the real app.
 model: Opus
 where: idea worktree, new tab
-avatar: avatars/reviewer.png
+avatar: avatars/reviewer.webp
 ---
 
 # Reviewer

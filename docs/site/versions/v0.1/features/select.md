@@ -2,7 +2,7 @@
 title: Select, copy and paste
 order: 2
 summary: Box-select or Shift-click several notes, then drag, copy or paste them together.
-image: feature-select.png
+image: feature-select.webp
 ---
 
 # Select, copy and paste

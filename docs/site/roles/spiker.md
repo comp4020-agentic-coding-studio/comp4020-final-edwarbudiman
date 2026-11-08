@@ -4,7 +4,7 @@ order: 6
 tagline: Builds the fastest clickable version, then throws it away.
 model: Sonnet
 where: spike worktree
-avatar: avatars/spiker.png
+avatar: avatars/spiker.webp
 ---
 
 # Spiker

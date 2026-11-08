@@ -5,7 +5,7 @@ order: 2
 
 # The agent pipeline
 
-![Post-its moving through research, decide, spike, build and review](/docs/assets/pipeline.png)
+![Post-its moving through research, decide, spike, build and review](/docs/assets/pipeline.webp)
 
 Every feature since week 10 has been built by Claude Code agents running side by side in [Herdr](https://herdr.dev). Each role has its own page under [Roles](/docs/roles/). I'm the owner: I make every product call, try every spike and finished feature myself, and do every merge.
 

@@ -25,9 +25,9 @@ import { config } from "./config.ts";
  *   title: Live cursors
  *   order: 3
  *   summary: one line for the index cards
- *   image: feature-cursors.png      (docs/readme-assets/, optional)
+ *   image: feature-cursors.webp      (docs/readme-assets/, optional)
  *   video: cursors-demo.mp4         (docs/readme-assets/, optional, wins over image)
- *   avatar: avatars/builder.png     (roles: docs/readme-assets/, optional)
+ *   avatar: avatars/builder.webp     (roles: docs/readme-assets/, optional)
  *   model: Sonnet                   (roles: shown in the profile header)
  *   tagline: Turns a brief into tested code  (roles)
  *   ---

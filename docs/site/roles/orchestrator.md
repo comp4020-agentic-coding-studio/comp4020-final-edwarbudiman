@@ -4,7 +4,7 @@ order: 2
 tagline: Starts ideas and watches across all of them.
 model: Opus
 where: root, on main
-avatar: avatars/orchestrator.png
+avatar: avatars/orchestrator.webp
 ---
 
 # Main orchestrator

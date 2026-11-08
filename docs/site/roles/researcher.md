@@ -4,7 +4,7 @@ order: 4
 tagline: Finds the evidence and ends with 2–3 shapes.
 model: Opus
 where: idea worktree, docs only
-avatar: avatars/researcher.png
+avatar: avatars/researcher.webp
 ---
 
 # Researcher

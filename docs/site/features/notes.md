@@ -2,7 +2,7 @@
 title: Notes on your board
 order: 1
 summary: Double-click anywhere to put a post-it there. Where it sits is how you prioritise it.
-image: feature-notes.png
+image: feature-notes.webp
 ---
 
 # Notes on your board

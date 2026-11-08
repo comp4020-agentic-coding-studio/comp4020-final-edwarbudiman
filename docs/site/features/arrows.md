@@ -3,7 +3,7 @@ title: Arrows between notes
 order: 7
 idea: note-arrows
 summary: Draw a one-way arrow from one note to another to show what leads to what.
-image: feature-arrows.png
+image: feature-arrows.webp
 ---
 
 # Arrows between notes

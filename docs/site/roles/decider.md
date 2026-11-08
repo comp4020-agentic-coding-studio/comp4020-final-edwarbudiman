@@ -4,7 +4,7 @@ order: 5
 tagline: Grills my pick until it holds.
 model: Opus (run by the lead)
 where: idea worktree, docs only
-avatar: avatars/decider.png
+avatar: avatars/decider.webp
 ---
 
 # Decider

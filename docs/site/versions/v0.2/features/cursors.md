@@ -2,7 +2,7 @@
 title: Live cursors and follow
 order: 5
 summary: See who else is on the board, watch their cursor, and click them to follow along.
-image: feature-cursors.png
+image: feature-cursors.webp
 ---
 
 # Live cursors and follow

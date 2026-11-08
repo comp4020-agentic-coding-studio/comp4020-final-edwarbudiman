@@ -2,7 +2,7 @@
 title: Channels and chat
 order: 6
 summary: Shared boards that anyone in the channel can edit, with a chat the server never stores.
-image: feature-channels.png
+image: feature-channels.webp
 ---
 
 # Channels and chat

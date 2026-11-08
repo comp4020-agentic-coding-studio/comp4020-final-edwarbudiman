@@ -4,7 +4,7 @@ order: 1
 tagline: Me. Makes every product call and every merge.
 model: Human
 where: anywhere
-avatar: avatars/owner.png
+avatar: avatars/owner.webp
 ---
 
 # Owner

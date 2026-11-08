@@ -41,7 +41,7 @@ title: Short human name
 order: <next free number>
 idea: <idea>
 summary: one sentence for the features index
-image: <slug>.png          (in docs/readme-assets/; leave out if none yet)
+image: <slug>.webp         (in docs/readme-assets/, converted with cwebp -q 80 -resize 1200 0; leave out if none yet)
 ---
 
 # Short human name

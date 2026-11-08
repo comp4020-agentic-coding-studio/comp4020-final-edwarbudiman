@@ -3,7 +3,7 @@ title: To-do status
 order: 4
 idea: note-status
 summary: Move a note from todo to doing to done without leaving the board.
-image: feature-status.png
+image: feature-status.webp
 ---
 
 # To-do status
