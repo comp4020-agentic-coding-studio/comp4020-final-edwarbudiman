@@ -265,7 +265,7 @@ body { background: var(--ifm-background-color); }
 .menu__group { display: block; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ifm-color-emphasis-600); padding: 1rem .75rem .35rem; text-decoration: none; }
 .menu__group:hover { color: var(--ifm-color-primary); text-decoration: none; }
 .menu__link { display: flex; align-items: center; gap: .55rem; }
-.role-avatar { border-radius: 50%; object-fit: cover; background: #fff6c9; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.role-avatar, .markdown img.role-avatar { border-radius: 50%; object-fit: cover; background: #fff6c9; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
 .role-avatar--sm { width: 1.6rem; height: 1.6rem; }
 .role-avatar--lg { width: 7rem; height: 7rem; border: 4px solid #fff; box-shadow: 3px 4px 0 rgba(0,0,0,.08); }
 .role-avatar--blank { display: inline-block; }
