@@ -1,0 +1,20 @@
+[
+  {
+    "id": "v1.0",
+    "label": "1.0 (current)",
+    "date": "2026-11-09",
+    "note": "Arrows between notes, the Herdr agent pipeline, these docs"
+  },
+  {
+    "id": "v0.2",
+    "label": "0.2",
+    "date": "2026-10-22",
+    "note": "Channels with chat and unread counts, to-do status"
+  },
+  {
+    "id": "v0.1",
+    "label": "0.1",
+    "date": "2026-10-06",
+    "note": "Crit 8: personal board, select and copy, labels, live cursors"
+  }
+]

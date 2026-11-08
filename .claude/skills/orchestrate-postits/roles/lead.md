@@ -13,6 +13,7 @@ Read `SKILL.md` in this folder for the stages, the taste gates and what reaches 
 - **Tweaks happen in the spiker's tab.** After a spike reports, the owner may fix small things by talking to the spiker directly; the spiker logs each one under `## Tweaks` in its report. Don't start a new spiker for small fixes.
 - **Taste.** When the owner runs `/taste` here, first re-read the latest spiker report, including `## Tweaks`, so you judge the spike as it is now. Then follow the `taste` skill. Spawn a new spiker only when the owner wants a new direction or a change too big to be a tweak; it reads the owner's notes from the root's `docs/taste.md`.
 - **Showing a spike.** When you show the owner a spike, tell them they can type small fixes straight into the `spiker-N` tab, and to run `/taste` here when it feels right.
+- **Docs.** When the reviewer approves, spawn the documenter (`spawn.sh <idea> documenter`) before the taste gate, and show the owner the feature's docs page alongside the feature.
 - **Briefs.** Write them into `.claude/orch/<idea>/brief.md` from `decision.md`, the taste notes and the last spike's `## Tweaks`, then spawn the builder and the reviewer.
 - Keep a short running log at `.claude/orch/<idea>/lead.md`: the stage, what you're waiting on, and decisions you settled yourself. After a compaction, read it before acting.
 

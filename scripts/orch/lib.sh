@@ -24,7 +24,7 @@ check_name() {
 
 # The idea's lead (its own orchestrator), then the stages in order. Each is
 # one worker role with roles/<role>.md.
-roles="lead researcher decider spiker builder reviewer"
+roles="lead researcher decider spiker builder reviewer documenter"
 check_role() {
   case " $roles " in *" $1 "*) ;; *) die "role must be one of: $roles" ;; esac
 }
@@ -32,7 +32,7 @@ check_role() {
 # Herdr agent names must match [a-z][a-z0-9_-]{0,31}.
 agent_name() {
   local p
-  case "$2" in lead) p=l ;; researcher) p=rs ;; decider) p=d ;; spiker) p=s ;; builder) p=b ;; reviewer) p=r ;; esac
+  case "$2" in lead) p=l ;; researcher) p=rs ;; decider) p=d ;; spiker) p=s ;; builder) p=b ;; reviewer) p=r ;; documenter) p=doc ;; esac
   echo "$p-$1"
 }
 

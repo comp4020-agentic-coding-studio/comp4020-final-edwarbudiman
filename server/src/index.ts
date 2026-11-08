@@ -8,6 +8,7 @@ import { HttpError, readJson, sameOrigin, sendJson } from "./http.ts";
 import { logEvent, recentActionCounts } from "./log.ts";
 import { attachRealtime, liveStats, userChanged } from "./realtime.ts";
 import { serveClient, serveReadme } from "./static.ts";
+import { serveDocs } from "./docs.ts";
 
 const db = openDb(config.dataDir);
 await seedDemo(db);
@@ -141,6 +142,7 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
   }
   if (method !== "GET" && method !== "HEAD") throw new HttpError(405, "method not allowed");
   if (path === "/readme" || path.startsWith("/readme/")) return serveReadme(req, res, path);
+  if (path === "/docs" || path.startsWith("/docs/")) return serveDocs(req, res, path);
   return serveClient(req, res, path);
 }
 

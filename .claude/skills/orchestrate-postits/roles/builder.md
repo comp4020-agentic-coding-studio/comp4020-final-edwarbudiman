@@ -30,3 +30,5 @@ Write one line for each item in a `## Pre-check` section of the report:
 ## Report body
 
 After the header: `## Plan`, `## What changed` (files and why), `## Pre-check`, `## How to try it by hand` (steps the owner follows on your ports), `## Follow-ups`.
+
+You don't write the feature's `/docs/` page. A documenter does that after review (`roles/documenter.md`).

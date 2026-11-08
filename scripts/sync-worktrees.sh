@@ -31,6 +31,8 @@ while IFS= read -r line; do
   # Skip the root worktree (already on main) and bare/detached entries.
   [[ "$wt_path" == "$repo_root" ]] && continue
   [[ -z "$branch" ]] && continue
+  # Spikes are throwaway smoke tests the owner may be trying right now; leave them.
+  [[ "$branch" == spike/* ]] && continue
 
   echo
   echo "== $branch ($wt_path) =="
