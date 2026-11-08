@@ -10,9 +10,9 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
-- `note-sidebar` — build (fix round 2, builder-3) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
+- `note-sidebar` — review (fix round 2, reviewer-3) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
 - `label-sections` — decide (lead-1, short decide: small idea) — drop per-note labels; a toolbar tool draws named label sections on the board that group the notes inside them
-- `agent-mcp` — research (lead-1, large) — make the app fully agent-able: self-serve API tokens, token-authed API reusing canSee/canEdit, an MCP server at /mcp (read and maybe write), plus a Claude skill. Extends ADR-0001 / checkpoint F
+- `agent-mcp` — research (lead-1, large) — make the app fully agent-able: self-serve API tokens, token-authed API reusing canSee/canEdit, an MCP server at /mcp (read and write), plus a Claude skill. Extends ADR-0001 / checkpoint F. Arranging into sections depends on label-sections
 - `agent-discovery` — research (lead-1, small) — checkpoint G: robots/sitemap/llms.txt, markdown negotiation, documented /api with a pointer to tokens and /mcp. Builds after agent-mcp merges
 
 ## Decisions
@@ -20,6 +20,7 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 <!-- One line each. Mark the ones the orchestrator settled with
      "(decided by orchestrator)" so the owner can overrule them. -->
 - note-sidebar: superseded by the owner's decision.md (2026-11-09). Spike builds two open-button variants behind ?v=a / ?v=b (decided by orchestrator)
+- agent-mcp (owner, 2026-11-09): agents can write, not just read. A token acts as its person (same permissions, no scopes or agent identity). Main jobs: read the board; move status forward or mark done; create notes and place them in existing label sections
 
 ## To-do for the owner
 
