@@ -18,6 +18,7 @@ Each line ends with the idea it came from and the date.
 - Animated motion for the sidebar and button: "add some animating the motion, so it will have fluid more" (note-sidebar, 2026-11-09)
 - Status as only three states: "none (not showing anything), on progress, or done" (note-sidebar, 2026-11-09)
 - Only the comments scroll, with the comment input "on the very bottom", going "from bottom to up for the newest to old, like youtube live comment. the design should accommodate that." (note-sidebar, 2026-11-09)
+- Notes with three sections and a border: "i like the thre section, and border" (note-sidebar, 2026-11-09)
 
 ## Dislikes
 
@@ -26,11 +27,14 @@ Each line ends with the idea it came from and the date.
 - An open button that's hard to see. Rejected both ?v=a (edge tab) and ?v=b (hover corner icon): "i prefer something that clearly can be seen." (note-sidebar, 2026-11-09)
 - The tick "not automatically change to my other tab (i checked it using two tab)" (note-sidebar, 2026-11-09)
 - The sidebar breaking when there are many comments: "if comments section long enough then it starts to break." (note-sidebar, 2026-11-09)
+- The corner button not lining up with the three sections and border: "it still not align well with the corner button" (note-sidebar, 2026-11-09)
+- The author name in the header strip: "it also shows whose post-it it is, but it's not explaining enough for me to see it as the creator of post-it" (note-sidebar, 2026-11-09)
 
 ## Log
 
 <!-- Newest first: date, idea, what was tried, the owner's reaction in their words. -->
 
+- 2026-11-09, note-sidebar, spike-2 (window-corner open button, animated sidebar, comments-only scroll, live proof; tweaks: more top padding for the text, then a three-section note with header strip, text and status footer): "i ask spiker-2 to redesign the post a little bit, now it has 3 section, and border as well. i like the thre section, and border, but it still not align well with the corner button, on top, it also shows whose post-it it is, but it's not explaining enough for me to see it as the creator of post-it"
 - 2026-11-09, note-sidebar, spike-1 (?v=a edge tab, ?v=b hover corner icon, client-only fakes): "1. i think we need to add some animating the motion, so it will have fluid more 2. not v=a or v=b, i prefer something that clearly can be seen. But my taste here is i believe we can make some button like, like it's part of the post-it, blend and like a window, but on the corner has button. 3. i like the idea of changing the symbol into checkmark when it's being ticked, but it's not automatically change to my other tab ( i checked it using two tab ) 4. status would be only, none (not showing anything), on progress, or done". Then, with a screenshot of the sidebar overflowing: "if comments section long enough then it starts to break. i want the scroll section would be for the comments, and for comment input should be placed on the very bottom, and it will go from bottom to up for the newest to old, like youtube live comment. the design should accommodate that." → re-spike.
 - 2026-11-09, note-arrows, build (reviewer-1 approved, PR #2): "i already liked everything" → merged.
 - 2026-11-05, note-arrows, spike-2: "alright, so it already done so far. for /taste, i believe i also has feedback, where the arrow pointing kinda auto, i want it to have some kind of magnet like feels that will stick to the nearest post-it, but not as static as now, because if the arrow already connect, the pointing arrow cannot be moved at all, i rather want it to be fluid, but magnetic enough, so it can land to any line on the post it." → re-spike.
