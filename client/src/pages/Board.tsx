@@ -2086,11 +2086,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
               Label
             </button>
           )}
-          {(
-            <button className="quiet" onClick={(e) => shiftStatus(e.shiftKey ? -1 : 1)} title="Your status: none, on progress, done (S); Shift-click or Shift S goes back">
-              Status
-            </button>
-          )}
+          <button className="quiet" onClick={(e) => shiftStatus(e.shiftKey ? -1 : 1)} title="Your status: none, on progress, done (S); Shift-click or Shift S goes back">
+            Status
+          </button>
           <button className="quiet" onClick={duplicateSelection} title="Duplicate (⌘D / Ctrl+D)">
             Duplicate
           </button>

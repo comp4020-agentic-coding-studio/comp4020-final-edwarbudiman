@@ -9,7 +9,8 @@ import type { Note, SideComment, SideData, SideStatus } from "../api.ts";
 type Person = NonNullable<SideData["people"]>[number];
 
 const ago = (t: number) => {
-  const m = Math.max(1, Math.round((Date.now() - t) / 60e3));
+  const m = Math.round((Date.now() - t) / 60e3);
+  if (m < 1) return "just now";
   if (m < 60) return `${m} min ago`;
   if (m < 60 * 24) return `${Math.round(m / 60)} h ago`;
   return `${Math.round(m / 60 / 24)} d ago`;
@@ -18,6 +19,7 @@ const initials = (name: string) => name.split(/[\s_-]+/).filter(Boolean).map((w)
 
 const CIRCLE = 28;
 const GAP = 4;
+const PILL = 52; // room kept for the +N pill (it is wider than a circle, up to "+999")
 
 /** One line of circles; whatever doesn't fit becomes +N at the end. */
 function FitRow({ people, tip, onTip, onMore }: { people: Person[]; tip: string | null; onTip: (name: string) => void; onMore: () => void }) {
@@ -27,8 +29,9 @@ function FitRow({ people, tip, onTip, onMore }: { people: Person[]; tip: string 
     const el = ref.current;
     if (!el) return;
     const calc = () => {
-      const fit = Math.max(1, Math.floor((el.clientWidth + GAP) / (CIRCLE + GAP)));
-      setCap(people.length <= fit ? people.length : Math.max(1, fit - 1));
+      const room = (w: number) => Math.max(1, Math.floor((w + GAP) / (CIRCLE + GAP)));
+      const all = room(el.clientWidth);
+      setCap(people.length <= all ? people.length : room(el.clientWidth - PILL - GAP));
     };
     calc();
     const ro = new ResizeObserver(calc);
