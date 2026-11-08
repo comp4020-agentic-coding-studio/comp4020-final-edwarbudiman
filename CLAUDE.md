@@ -85,6 +85,16 @@ and tested. Each feature lives in its own linked worktree:
   test it there, then run the sync script so the other features pick it up.
 - Use merges to bring `main` into a feature branch, not rebases.
 
+## Running commands
+
+Node and pnpm are pinned by mise (`mise.toml`) and aren't on the plain `PATH`
+of agent shells, so always run them through mise:
+
+- `mise exec -- pnpm check`, `mise exec -- pnpm dev`, `mise exec -- pnpm install --frozen-lockfile`,
+  `mise exec -- pnpm vitest run spec/arrows.test.ts`, `mise exec -- node ...`.
+- Wherever this file, a skill or a role says `pnpm ...`, read it as `mise exec -- pnpm ...`.
+- A new worktree must be trusted once: `mise trust <worktree path>`.
+
 ## Working with agents
 
 Work runs as a pipeline in Herdr, one idea at a time or several in parallel.
@@ -106,4 +116,4 @@ the scripts are in `scripts/orch/`; the orchestrator's state is
   owner merges into `main`, after checking the feature by hand.
 - Whenever you show the owner something to judge, end with a reminder to run
   `/taste` so their reaction is saved.
-- Checks: `pnpm check`. App verification: the `verify-postits` skill.
+- Checks: `mise exec -- pnpm check`. App verification: the `verify-postits` skill.

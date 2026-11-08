@@ -24,10 +24,10 @@ RUN_ID=$(date +%s)
 export DATA_DIR=/tmp/postit-verify-$RUN_ID
 export PORT=18080
 mkdir -p "$DATA_DIR"
-node --disable-warning=ExperimentalWarning server/src/index.ts > /tmp/postit-verify-server-$RUN_ID.log 2>&1 &
+mise exec -- node --disable-warning=ExperimentalWarning server/src/index.ts > /tmp/postit-verify-server-$RUN_ID.log 2>&1 &
 SERVER_PID=$!
 
-API_URL=http://localhost:18080 pnpm exec vite --config client/vite.config.ts --port 18173 > /tmp/postit-verify-client-$RUN_ID.log 2>&1 &
+API_URL=http://localhost:18080 mise exec -- pnpm exec vite --config client/vite.config.ts --port 18173 > /tmp/postit-verify-client-$RUN_ID.log 2>&1 &
 CLIENT_PID=$!
 ```
 
