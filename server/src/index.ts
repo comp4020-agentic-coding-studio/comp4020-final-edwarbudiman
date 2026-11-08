@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { changePassword, login, logout, publicUser, requireUser, seedDemo, signup, updateMe } from "./auth.ts";
-import { channelBoard, createChannel, createNote, deleteNote, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
+import { channelBoard, createArrow, createChannel, createNote, deleteArrow, deleteNote, updateArrow, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
 import { config } from "./config.ts";
 import { openDb } from "./db.ts";
 import { HttpError, readJson, sameOrigin, sendJson } from "./http.ts";
@@ -51,6 +51,20 @@ route("PATCH", /^\/api\/notes\/(\d+)$/, async (req, res, [id]) => {
 });
 route("DELETE", /^\/api\/notes\/(\d+)$/, (req, res, [id]) => {
   deleteNote(db, requireUser(db, req), Number(id));
+  sendJson(res, 200, { ok: true });
+});
+
+route("POST", /^\/api\/boards\/(\d+)\/arrows$/, async (req, res, [id]) => {
+  const user = requireUser(db, req);
+  const { arrow, created } = createArrow(db, user, Number(id), await readJson(req));
+  sendJson(res, created ? 201 : 200, { arrow });
+});
+route("PATCH", /^\/api\/arrows\/(\d+)$/, async (req, res, [id]) => {
+  const user = requireUser(db, req);
+  sendJson(res, 200, { arrow: updateArrow(db, user, Number(id), await readJson(req)) });
+});
+route("DELETE", /^\/api\/arrows\/(\d+)$/, (req, res, [id]) => {
+  deleteArrow(db, requireUser(db, req), Number(id));
   sendJson(res, 200, { ok: true });
 });
 
