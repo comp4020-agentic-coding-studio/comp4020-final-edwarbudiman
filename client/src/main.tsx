@@ -9,13 +9,14 @@ import { Shell } from "./pages/Channels.tsx";
 import { Settings } from "./pages/Settings.tsx";
 import { Stats } from "./pages/Stats.tsx";
 import { Link, SessionContext, navigate, usePath } from "./router.tsx";
+import { SERVER_PAGES, SPA_PAGES } from "./routes.ts";
 import "./styles.css";
 
 /** App pages that sit at the top level next to users' boards (signup reserves these names). */
-const PAGES = new Set(["settings", "stats", "login", "signup", "readme", "docs"]);
+const PAGES = new Set<string>([...SPA_PAGES, ...SERVER_PAGES]);
 
 /** Pages the server renders itself (README and the docs site), not the SPA. */
-const SERVER_PAGE = /^\/(readme|docs)(\/|$)/;
+const SERVER_PAGE = new RegExp(`^/(${SERVER_PAGES.join("|")})(/|$)`);
 
 function App() {
   const path = usePath();

@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import { SERVER_ENDPOINTS, SERVER_PAGES, proxyKey } from "./src/routes.ts";
 
 const target = process.env.API_URL ?? "http://localhost:8080";
 
@@ -15,12 +16,10 @@ export default defineConfig({
     // Each feature worktree gets its own pair (scripts/orch/spawn.sh)
     port: Number(process.env.CLIENT_PORT ?? 5173),
     strictPort: true,
-    proxy: {
-      "/api": { target, changeOrigin: false },
-      // Anchored, so usernames like /docs-x or /readmex stay boards in the SPA
-      "^/readme(/|$)": { target, changeOrigin: false },
-      "^/docs(/|$)": { target, changeOrigin: false },
-      "/ws": { target, ws: true, changeOrigin: false },
-    },
+    proxy: Object.fromEntries(
+      // every server-owned top-level path, anchored (see src/routes.ts)
+      [...SERVER_ENDPOINTS, ...SERVER_PAGES]
+        .map((name) => [proxyKey(name), { target, changeOrigin: false, ws: name === "ws" }]),
+    ),
   },
 });
