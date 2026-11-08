@@ -2160,7 +2160,7 @@ const SHORTCUTS: [string, string][] = [
   ["Copy, cut, paste", `${mod} C, ${mod} X, ${mod} V`],
   ["Duplicate", `${mod} D`],
   ["Label the selection", "L"],
-  ["Status forward / back", "S, Shift S"],
+  ["Your status: none, on progress, done / back", "S, Shift S"],
   ["Follow someone", "Click their avatar, top right (Esc stops)"],
   ["Delete", "Delete or Backspace"],
   ["Move the selection", "Arrow keys (Shift for bigger steps)"],
