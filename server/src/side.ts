@@ -1,7 +1,7 @@
 import type { DB } from "./db.ts";
 import type { User } from "./auth.ts";
 import type { Board, NoteRow, SideStatus } from "./boards.ts";
-import { COMMENT_MAX, SIDE_STATUSES, hooks, noteForWrite, noteOut, noteSummary } from "./boards.ts";
+import { COMMENT_MAX, SIDE_STATUSES, getNote, hooks, noteForWrite, noteOut, noteSummary } from "./boards.ts";
 import { HttpError } from "./http.ts";
 import { logAction } from "./log.ts";
 
@@ -37,8 +37,7 @@ function commentOut(board: Board, c: CommentRow, userId: number) {
 
 function changed(db: DB, user: User, board: Board, note: NoteRow, action: string, extra: Record<string, unknown> = {}) {
   logAction(user.username, action, { board: board.id, note: note.id, ...extra });
-  // proof lives on the note row, so re-read it before telling everyone
-  hooks.sideChanged(board, db.prepare("SELECT n.id, n.board_id, n.author_id, u.username AS author, n.text, n.color, n.x, n.y, n.z, n.visibility, n.labels, n.proof, n.version, n.created_at, n.updated_at FROM notes n JOIN users u ON u.id = n.author_id WHERE n.id = ?").get(note.id) as unknown as NoteRow);
+  hooks.sideChanged(board, getNote(db, note.id)!); // re-read: proof lives on the note row
 }
 
 // ---------------------------------------------------------------- reads

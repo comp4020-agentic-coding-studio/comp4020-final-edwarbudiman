@@ -97,18 +97,27 @@ describe("proof", () => {
     expect((await a.call("PUT", `/api/notes/${note.id}/proof`, { proof: true })).status).toBe(200);
   });
 
-  it("reaches other viewers live, each with their own shape", async () => {
+  it("reaches other viewers live, each with their own summary and never a position", async () => {
     const [a, b] = [await signup("a"), await signup("b")];
     const { board, note } = await noteOn(b, a);
     const liveB = await connect(b, board.id);
     try {
       await a.call("PUT", `/api/notes/${note.id}/proof`, { proof: true });
-      const seen = await liveB.next((m) => m.type === "note:upsert" && m.note.id === note.id && m.note.proof === true, 1000);
-      expect(seen.note.myStatus).toBeNull();
-      await liveB.next((m) => m.type === "note:side" && m.id === note.id, 1000);
+      const seen = await liveB.next((m) => m.type === "note:side" && m.id === note.id && m.summary.proof === true, 1000);
+      expect(seen.summary.myStatus).toBeNull();
       await b.call("PUT", `/api/notes/${note.id}/status`, { status: "done" });
-      const own = await liveB.next((m) => m.type === "note:upsert" && m.note.id === note.id && m.note.myStatus === "done", 1000);
-      expect(own.note.needsProof).toBe(false);
+      const own = await liveB.next((m) => m.type === "note:side" && m.id === note.id && m.summary.myStatus === "done", 1000);
+      expect(own.summary).toMatchObject({ needsProof: false, doneCount: 1 });
+      // the creator's own copy flags it, the others' don't
+      await a.call("PUT", `/api/notes/${note.id}/proof`, { proof: false });
+      const liveA = await connect(a, board.id);
+      try {
+        await b.call("PUT", `/api/notes/${note.id}/status`, { status: null });
+        await b.call("PUT", `/api/notes/${note.id}/status`, { status: "done" });
+        expect((await liveA.next((m) => m.type === "note:side" && m.summary.doneCount === 1, 1000)).summary.needsProof).toBe(true);
+      } finally {
+        await liveA.close();
+      }
     } finally {
       await liveB.close();
     }
@@ -218,13 +227,12 @@ describe("comments live", () => {
     const liveB = await connect(b, board.id);
     try {
       const id = (await a.call("POST", `/api/notes/${note.id}/comments`, { text: "one" })).body.comment.id;
-      const created = await liveB.next((m) => m.type === "note:upsert" && m.note.id === note.id && m.note.commentCount === 1, 1000);
-      expect(created.note.commentCount).toBe(1);
-      await liveB.next((m) => m.type === "note:side" && m.id === note.id, 1000);
+      const created = await liveB.next((m) => m.type === "note:side" && m.id === note.id && m.summary.commentCount === 1, 1000);
+      expect(created.summary.commentCount).toBe(1);
       await a.call("PATCH", `/api/comments/${id}`, { text: "two" });
       await liveB.next((m) => m.type === "note:side" && m.id === note.id, 1000);
       await a.call("DELETE", `/api/comments/${id}`);
-      await liveB.next((m) => m.type === "note:upsert" && m.note.id === note.id && m.note.commentCount === 0, 1000);
+      await liveB.next((m) => m.type === "note:side" && m.id === note.id && m.summary.commentCount === 0, 1000);
     } finally {
       await liveB.close();
     }

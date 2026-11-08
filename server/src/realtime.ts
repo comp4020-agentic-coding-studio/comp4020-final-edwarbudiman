@@ -7,7 +7,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { User } from "./auth.ts";
 import { getUser, sessionUser } from "./auth.ts";
 import type { ArrowRow, Board, NoteRow } from "./boards.ts";
-import { arrowOut, arrowsOfNote, canEnter, canSeeArrow, canMove, canSee, getBoard, getNote, hooks, markSeen, noteOut } from "./boards.ts";
+import { arrowOut, arrowsOfNote, canEnter, canSeeArrow, canMove, canSee, getBoard, getNote, hooks, markSeen, noteOut, noteSummary } from "./boards.ts";
 import { config } from "./config.ts";
 import type { DB } from "./db.ts";
 import { sameOrigin } from "./http.ts";
@@ -430,13 +430,13 @@ export function attachRealtime(server: Server, database: DB): void {
     if (note.version === 1) activity(board, note);
   };
   // Status, proof or a comment changed. Each viewer gets their own summary
-  // (myStatus, needsProof differ per person) and a nudge to refetch the open
-  // sidebar. Both go through the same canSee rule as notes.
+  // (myStatus and needsProof differ per person) and refetches the sidebar if
+  // that note's is open. It's not a note:upsert, so it never carries a
+  // position that could pull a note someone is dragging back to where it was.
+  // Same canSee rule as notes.
   hooks.sideChanged = (board, note) => {
     for (const c of rooms.get(board.id) ?? []) {
-      if (!canSee(board, note, c.user.id)) continue;
-      send(c, { type: "note:upsert", note: noteOut(db, board, note, c.user.id) });
-      send(c, { type: "note:side", id: note.id });
+      if (canSee(board, note, c.user.id)) send(c, { type: "note:side", id: note.id, summary: noteSummary(db, note, c.user.id) });
     }
   };
   hooks.noteDeleted = (board, note) => {
