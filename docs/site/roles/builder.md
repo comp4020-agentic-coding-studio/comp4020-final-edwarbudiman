@@ -1,7 +1,7 @@
 ---
 title: Builder
 order: 7
-tagline: Turns the brief into tested code and a docs page.
+tagline: Turns the brief into tested code.
 model: Sonnet
 where: idea worktree
 avatar: avatars/builder.webp
@@ -9,13 +9,12 @@ avatar: avatars/builder.webp
 
 # Builder
 
-Implements one brief in the idea's worktree and commits in small steps. It borrows ideas from the spike but never its code. Before it reports, it runs a pre-check: tests for every behaviour, the contract matches, its own diff is clean, and it writes the feature's docs page.
+Implements one brief in the idea's worktree and commits in small steps. It borrows ideas from the spike but never its code. Before it reports, it runs a pre-check: tests for every behaviour, the contract matches, its own diff is clean,.
 
 ## What it does
 
 - Write specs in `spec/` for each new behaviour, error paths included.
 - Update the `verify-postits` feature file so the reviewer can drive it.
-- Write `docs/site/features/<slug>.md`: what it is, how to use it, which specs check it.
 - Run the full `pnpm check` before reporting.
 
 ## What it never does
@@ -26,6 +25,6 @@ Implements one brief in the idea's worktree and commits in small steps. It borro
 
 ## What it leaves behind
 
-commits on `feat/<idea>`, the feature's docs page
+commits on `feat/<idea>`
 
 Full instructions: `.claude/skills/orchestrate-postits/roles/builder.md`.

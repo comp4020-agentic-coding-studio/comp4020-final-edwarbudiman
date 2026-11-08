@@ -31,31 +31,4 @@ Write one line for each item in a `## Pre-check` section of the report:
 
 After the header: `## Plan`, `## What changed` (files and why), `## Pre-check`, `## How to try it by hand` (steps the owner follows on your ports), `## Follow-ups`.
 
-## The feature's docs page
-
-Every feature ships with a page on the `/docs/` site. Before you report `status: done`, write or update `docs/site/features/<slug>.md`:
-
-```
----
-title: Short human name
-order: <next free number>
-idea: <idea>
-summary: one sentence for the features index
-image: <slug>.webp         (in docs/readme-assets/, converted with cwebp -q 80 -resize 1200 0; leave out if none yet)
----
-
-# Short human name
-
-One or two sentences: what it is and why it's on the board.
-
-## How to use it
-
-1. Numbered steps with the real keys and button names from the UI.
-
-## Checked by
-
-- the spec files that cover it.
-```
-
-`pnpm check` runs `check:docs`, which fails if the page is missing a title, summary or `## How to use it`.
-
+You don't write the feature's `/docs/` page. A documenter does that after review (`roles/documenter.md`).

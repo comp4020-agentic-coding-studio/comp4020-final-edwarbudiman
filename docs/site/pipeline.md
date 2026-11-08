@@ -22,8 +22,8 @@ Each idea gets its own git worktree (`.claude/worktrees/<idea>` on `feat/<idea>`
 | 2 | Decide | lead, talking with me | `decision.md`: the shape I picked, "it works if" lines | pick and defend |
 | 3 | Spike | spiker | a throwaway clickable version (~30 min, never merged) | try it, then `/taste` |
 | 4 | Build | builder | the real feature from a brief, with tests | |
-| 5 | Review | reviewer | `pnpm check`, a drive of the real app in Chrome, a check against my taste | try it, `/taste`, merge |
-| 6 | Docs | reviewer drafts, I check | `docs/site/features/<idea>.md` with a demo | approve the page |
+| 5 | Review | reviewer | `pnpm check`, a drive of the real app in Chrome, a check against my taste | |
+| 6 | Docs | documenter, in a new tab | `docs/site/features/<slug>.md` with a real demo, committed on the branch | try the feature, read its page, `/taste`, merge |
 | 7 | Reflect | orchestrator | edits to role files, `taste.md`, `rejected.md` | |
 
 ## Taste gates
@@ -36,7 +36,7 @@ If the reviewer asks for changes, a *fresh* builder fixes the blockers and a fre
 
 ## Shipping a feature
 
-When I merge a feature, its docs page has to exist, and a release that changes what users can do gets a new docs version (`pnpm docs:version v1.1 "1.1" "what changed"`). `pnpm check:docs` fails if a merged `feat/<idea>` has no `docs/site/features/<idea>.md`, so the feature list on this site can't fall behind the app.
+As soon as the reviewer approves, the lead opens a new tab for the [documenter](/docs/roles/documenter/). It follows the feature's steps in the real app, writes the page, and commits it with a demo on the feature branch, so the docs arrive in the same merge as the feature. When I merge a feature, its docs page has to exist, and a release that changes what users can do gets a new docs version (`pnpm docs:version v1.1 "1.1" "what changed"`). `pnpm check:docs` fails if a merged `feat/<idea>` has no `docs/site/features/<idea>.md`, so the feature list on this site can't fall behind the app.
 
 ## Where the ideas came from
 

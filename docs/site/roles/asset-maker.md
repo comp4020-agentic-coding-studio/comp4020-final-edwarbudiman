@@ -1,6 +1,6 @@
 ---
 title: Asset maker
-order: 9
+order: 10
 tagline: Draws the illustrations for the README and these docs.
 model: Codex
 where: idea worktree, assets only

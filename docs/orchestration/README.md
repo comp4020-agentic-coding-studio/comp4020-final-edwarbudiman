@@ -32,7 +32,8 @@ test them side by side because each has its own ports.
 | 2 | Decide | decider (Opus), talking with me | `decision.md`: the shape I picked after being grilled, what I didn't pick, "it works if" lines | pick and defend |
 | 3 | Spike | spiker (Sonnet) | a smoke test (about 30 minutes, no tests, hacks allowed) running on the spike ports | try it, tweak small things in the spiker's tab, then `/taste` in the lead tab |
 | 4 | Build | builder (Sonnet) | the real feature from a brief, with tests | |
-| 5 | Review | reviewer (Opus) | `pnpm check`, an app drive with `verify-postits`, a check against `taste.md` | try it, `/taste`, merge |
+| 5 | Review | reviewer (Opus) | `pnpm check`, an app drive with `verify-postits`, a check against `taste.md` | |
+| 5b | Docs | documenter (Sonnet), in a new tab | the feature's `/docs/` page with a real demo, committed on the branch | try the feature and read its page, `/taste`, merge |
 | 6 | Reflect | orchestrator | edits to role files, `taste.md`, `rejected.md` | |
 
 Small fixes to a spike I type straight into the spiker's tab, so it keeps its
@@ -52,6 +53,7 @@ researchers read that file first, so dropped ideas don't come back.
 | Spiker | the spike worktree | write tests or polish, merge |
 | Builder | the idea's worktree | merge, push, rebase, leave the brief's scope |
 | Reviewer | the idea's worktree, new tab | edit or commit anything |
+| Documenter | the idea's worktree, new tab | edit app code, describe what it didn't see work |
 
 The reviewer runs on a different model from the builder and never saw the
 build, so it judges only from the brief, the diff, the running app and my taste.
@@ -65,11 +67,11 @@ build, so it judges only from the brief, the diff, the running app and my taste.
 2. **Build**, then **review** when the builder reports `status: done`.
 3. **Fix rounds.** On `verdict: changes`, a fresh builder fixes the blockers and a
    fresh reviewer checks again. After two failed rounds it comes back to me.
-4. **Docs page.** The builder writes `docs/site/features/<slug>.md` (what it is,
-   "How to use it" steps, which specs check it), and the reviewer checks every
-   step against the app and records a demo GIF or screenshot. `pnpm check:docs`
-   fails on `main` if a merged idea has no page, so the `/docs/` feature list
-   stays complete.
+4. **Docs page.** On `verdict: approve` the lead spawns a documenter in a new
+   tab. It writes `docs/site/features/<slug>.md` (what it is, "How to use it"
+   steps it has followed in the app, which specs check it), records a demo, and
+   commits on the branch. `pnpm check:docs` fails on `main` if a merged idea has
+   no page, so the `/docs/` feature list stays complete.
 5. **My check.** On `verdict: approve`, I try it on its ports and run `/taste`.
    Then I merge from root (`git merge feat/<idea>`), run
    `scripts/sync-worktrees.sh`, and `scripts/orch/retire.sh <idea>`.
@@ -82,7 +84,7 @@ reviewer shares one Chrome.
 | Command | What it does |
 |---|---|
 | `scripts/orch/new-idea.sh <idea> "<seed>"` | Creates the idea's worktree and branch from `main` and commits `docs/ideas/<idea>/idea.md`. Warns when the name is in `rejected.md`. |
-| `scripts/orch/spawn.sh <idea> <role> [model]` | Roles: `lead` (the idea's own orchestrator, spawned first), `researcher`, `decider`, `spiker`, `builder`, `reviewer`. Each needs the previous stage's file first. The first spawn opens the Herdr workspace; every spawn opens a tab, starts Claude and points it at its role file. A new round of a role closes that role's previous tab. |
+| `scripts/orch/spawn.sh <idea> <role> [model]` | Roles: `lead` (the idea's own orchestrator, spawned first), `researcher`, `decider`, `spiker`, `builder`, `reviewer`, `documenter` (after an approved review). Each needs the previous stage's file first. The first spawn opens the Herdr workspace; every spawn opens a tab, starts Claude and points it at its role file. A new round of a role closes that role's previous tab. |
 | `scripts/orch/wait.sh <idea> <role> [timeout-ms]` | Waits until the worker settles. Exit 0 with a one-line summary when its report has this round's token, 2 when it is blocked on a dialog, 3 when it stopped without a report. |
 | `scripts/orch/resume.sh <idea> <role\|role-N>` | Brings back a worker whose Claude session died (Herdr restart, closed pane) with its whole conversation, keeping its round, token and report path. Uses the session id that `spawn.sh` saved in `reports/<label>.session`, or finds it from the spawn prompt in the worktree's transcripts. After a restart, resume each idea's lead and it resumes its own workers. |
 | `scripts/orch/status.sh` | One row per idea: its stage, latest worker, Herdr state, result, branch head, and whether the review is stale. |

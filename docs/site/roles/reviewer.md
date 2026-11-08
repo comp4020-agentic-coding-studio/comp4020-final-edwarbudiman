@@ -16,7 +16,6 @@ Runs on a different model from the builder and never saw the build, so it judges
 - Check every acceptance line against the code.
 - Run `pnpm check`. A test that passes on `main` and fails here is a blocker.
 - Drive the feature in Chrome with `verify-postits` and save evidence.
-- Check the docs page against the app step by step, and record a demo GIF or screenshot for it.
 - Write `verdict: approve | changes | blocked`.
 
 ## What it never does
@@ -25,6 +24,6 @@ Runs on a different model from the builder and never saw the build, so it judges
 
 ## What it leaves behind
 
-review report, app-drive evidence, the docs demo
+review report, app-drive evidence
 
 Full instructions: `.claude/skills/orchestrate-postits/roles/reviewer.md`.

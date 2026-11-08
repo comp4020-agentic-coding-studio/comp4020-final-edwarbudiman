@@ -21,10 +21,9 @@ On a re-review (the brief has a `## Fix round` section), read only what changed 
 
 Write `verdict: approve` only when there are no blockers and the app drive passed. Write `verdict: blocked` when you could not run the checks or the app (say why); that is not a pass.
 
-After the header: `## Acceptance` (each line and where it is done), `## Blockers` (numbered, with `file:line`, each one a reason for a fix round), `## Nits` (style or naming, never blocking), `## App drive` (what you did, what you saw, evidence paths, the SQLite query output), `## Taste` (lines from `docs/taste.md` this touches, and how), `## Checks` (the `pnpm check` tail), `## Docs page` (whether `docs/site/features/<slug>.md` matches what the app does, step by step; a missing page or a "How to use it" step that doesn't work is a blocker).
+After the header: `## Acceptance` (each line and where it is done), `## Blockers` (numbered, with `file:line`, each one a reason for a fix round), `## Nits` (style or naming, never blocking), `## App drive` (what you did, what you saw, evidence paths, the SQLite query output), `## Taste` (lines from `docs/taste.md` this touches, and how), `## Checks` (the `pnpm check` tail).
 
-While you drive the app, record the feature's demo for its docs page: a short GIF or MP4 (`docs/readme-assets/<slug>-demo.*`) or a screenshot (`<slug>.png`, converted to `.webp` at 1200px wide with `cwebp -q 80` before it goes into `docs/readme-assets/`). Save it to `.claude/orch/<idea>/evidence/` and give its path under `## Docs page`; the builder of the next round, or the lead after approval, moves it into `docs/readme-assets/` and names it in the page's front matter (`video:` or `image:`).
 
 On `verdict: approve`, end the report with this line, exactly:
 
-`After you've tried it, run /taste in any session and say what you think, so it is saved to docs/taste.md.`
+`Approved. Next: the lead spawns the documenter for the feature's docs page, then the owner tries the feature and runs /taste.`
