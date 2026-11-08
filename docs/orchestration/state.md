@@ -10,7 +10,6 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
-- `note-arrows` — merged (PR #2, a84d8fd), waiting on cleanup — owner-only arrows between notes with magnetic, movable ends
 - `note-sidebar` — taste (spike-2) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
 
 ## Decisions
@@ -22,7 +21,6 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 ## To-do for the owner
 
 <!-- Decide sessions, taste gates (with the /taste reminder), merges, blocked dialogs. -->
-- `note-arrows`: PR #2 merged on GitHub (a84d8fd). In root: `git pull` (merge origin/main into your local main), then `scripts/sync-worktrees.sh` and `scripts/orch/retire.sh note-arrows`. Also delete the remote branch `feat/note-arrows`.
 - `note-sidebar`: spike-2 ready at http://localhost:5198/ (alice / bob, spike-pass-123). Try it, then run /taste in the lead-1 tab of workspace `feat/note-sidebar`.
 
 ## Reflections

@@ -55,8 +55,14 @@ fi
 git -C "$repo_root" branch -D "spike/$name" >/dev/null 2>&1 || true
 [ -d "$wt" ] && git -C "$repo_root" worktree remove --force "$wt"
 if git -C "$repo_root" rev-parse -q --verify "refs/heads/$branch" >/dev/null; then
-  merge="$(git -C "$repo_root" rev-list --ancestry-path --merges "$branch..main" | tail -1)"
-  if [ "$rejected" = 1 ]; then git -C "$repo_root" branch -D "$branch"; else git -C "$repo_root" branch -d "$branch"; fi
+  # sync-worktrees.sh may have merged main into the branch after the PR, so look
+  # for the merge from the pushed tip when there is one. -D is safe: the merge
+  # check above already proved the branch is in main (git -d would compare it
+  # with origin/feat/<idea> instead).
+  tip="$branch"
+  git -C "$repo_root" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null && tip="origin/$branch"
+  merge="$(git -C "$repo_root" rev-list --ancestry-path --merges "$tip..main" | tail -1)"
+  git -C "$repo_root" branch -D "$branch"
 fi
 git -C "$repo_root" worktree prune
 
