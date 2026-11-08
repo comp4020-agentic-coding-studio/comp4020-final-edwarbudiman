@@ -88,3 +88,43 @@ the first letters). I then checked everything by hand.
 The personal board is done for this checkpoint
 ([`957d95c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/957d95c)),
 and so far it's all good.
+
+## Creating a pipeline for Claude so it can manage multiple roles and build features
+
+<!-- HINT: notes for you to write this section in your own words, then
+     delete this comment. Points to cover:
+
+- Why: one long chat per feature mixed research, design, and code, and
+  lost context. I wanted several ideas moving in parallel, each with a
+  clear owner, and me only stepping in to judge.
+- The shape: one idea = one git worktree (`feat/<idea>`) + one Herdr
+  workspace. Each role is a tab running its own Claude session:
+  lead (the idea's orchestrator) → researcher → decider → spiker (a
+  throwaway `spike/<idea>` branch, never merged) → builder → reviewer.
+  Roles are plain markdown files in
+  `.claude/skills/orchestrate-postits/roles/`; the scripts that start and
+  watch them are in `scripts/orch/` (`new-idea.sh`, `spawn.sh`, `wait.sh`,
+  `status.sh`, `resume.sh`, `retire.sh`).
+- Handoff is files, not chat: idea.md → research.md → decision.md →
+  brief.md → reports. Each report starts with a per-round token so a
+  stale report from an earlier round is never read as the new one.
+- I stay in the loop at "taste gates": I try each spike in the browser
+  and run `/taste`, and my reactions go in `docs/taste.md`, which every role reads.
+  Small fixes I type straight into the spiker's tab ("## Tweaks").
+  Only I merge into `main`.
+- Each idea gets its own ports, so spikes and builds run side by side
+  without clashing with main (8080/5173).
+- Dry run on note-arrows: research ~7 min, decide ~21 min, then three
+  spikes. The spikes changed the decision (four-sided nub, magnetic
+  movable ends, two lines for A↔B, arrow colour), so for small UI ideas
+  the spike taught more than the research. Proposed change: size each idea
+  first, and give small ideas a lighter research and decide stage.
+- Something that broke: Herdr doesn't bring agents back after a
+  restart, so all the workers silently went "gone" mid-build. Fix:
+  `spawn.sh` now pins each Claude session id, and `resume.sh` reopens a
+  worker with its whole conversation, keeping the same round and report.
+  The lead can resume any of its own roles, so after a restart I only
+  resume the leads and they bring back their workers.
+- What to reflect on: is this overkill for one person? Where did it save
+  me time and where did it cost me time? What did the taste gates catch that tests didn't?
+-->

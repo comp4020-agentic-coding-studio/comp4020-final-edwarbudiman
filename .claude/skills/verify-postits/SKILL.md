@@ -9,7 +9,7 @@ Post-its is a web app: a post-it note board with live multi-user cursors, per-us
 
 ## Worktrees
 
-This repo keeps each feature in its own linked worktree (`.claude/worktrees/<name>`, branch `feat/<name>`; see root `CLAUDE.md`). Run this skill **from the worktree whose feature you're verifying**, not from root, unless the feature you're checking is already merged into `main` — root's checkout is only current for merged work. A fresh worktree doesn't have `.cursor/skills/verify-postits/` until it's committed on `main` and picked up by `scripts/sync-worktrees.sh`; if the skill is missing from a worktree, either run the sync script from root first, or point this skill's launch commands at the worktree's path explicitly (the launch commands below are plain shell run with the worktree as cwd — no path changes needed once cwd is set correctly).
+This repo keeps each feature in its own linked worktree (`.claude/worktrees/<name>`, branch `feat/<name>`; see root `CLAUDE.md`). Run this skill **from the worktree whose feature you're verifying**, not from root, unless the feature you're checking is already merged into `main` — root's checkout is only current for merged work. A fresh worktree doesn't have `.claude/skills/verify-postits/` until it's committed on `main` and picked up by `scripts/sync-worktrees.sh`; if the skill is missing from a worktree, either run the sync script from root first, or point this skill's launch commands at the worktree's path explicitly (the launch commands below are plain shell run with the worktree as cwd — no path changes needed once cwd is set correctly).
 
 In a worktree started by `scripts/orch/spawn.sh`, the environment has `VERIFY_SERVER_PORT` and `VERIFY_CLIENT_PORT` (also in `.claude/orch/<feature>/env.sh`). Use those everywhere this skill and its feature files say `18080` and `18173`, so parallel features never share a port. Two verifiers still share one Chrome, so browser drives run one at a time.
 
@@ -24,10 +24,10 @@ RUN_ID=$(date +%s)
 export DATA_DIR=/tmp/postit-verify-$RUN_ID
 export PORT=18080
 mkdir -p "$DATA_DIR"
-node --disable-warning=ExperimentalWarning server/src/index.ts > /tmp/postit-verify-server-$RUN_ID.log 2>&1 &
+mise exec -- node --disable-warning=ExperimentalWarning server/src/index.ts > /tmp/postit-verify-server-$RUN_ID.log 2>&1 &
 SERVER_PID=$!
 
-API_URL=http://localhost:18080 pnpm exec vite --config client/vite.config.ts --port 18173 > /tmp/postit-verify-client-$RUN_ID.log 2>&1 &
+API_URL=http://localhost:18080 mise exec -- pnpm exec vite --config client/vite.config.ts --port 18173 > /tmp/postit-verify-client-$RUN_ID.log 2>&1 &
 CLIENT_PID=$!
 ```
 

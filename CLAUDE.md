@@ -85,20 +85,35 @@ and tested. Each feature lives in its own linked worktree:
   test it there, then run the sync script so the other features pick it up.
 - Use merges to bring `main` into a feature branch, not rebases.
 
+## Running commands
+
+Node and pnpm are pinned by mise (`mise.toml`) and aren't on the plain `PATH`
+of agent shells, so always run them through mise:
+
+- `mise exec -- pnpm check`, `mise exec -- pnpm dev`, `mise exec -- pnpm install --frozen-lockfile`,
+  `mise exec -- pnpm vitest run spec/arrows.test.ts`, `mise exec -- node ...`.
+- Wherever this file, a skill or a role says `pnpm ...`, read it as `mise exec -- pnpm ...`.
+- A new worktree must be trusted once: `mise trust <worktree path>`.
+
 ## Working with agents
 
-Feature work can run as a pipeline in Herdr: the owner and an orchestrator
-session set the direction, then each feature gets a builder agent and a
-separate reviewer agent in its own worktree. The playbook is the
-`orchestrate-postits` skill (`.cursor/skills/orchestrate-postits/`); the
-scripts are in `scripts/orch/`; the orchestrator's state is
+Work runs as a pipeline in Herdr, one idea at a time or several in parallel.
+Each idea gets one worktree (`.claude/worktrees/<idea>`, branch `feat/<idea>`)
+and one Herdr workspace, and moves through research, decide, a throwaway spike
+(`spike/<idea>`, never merged), build and review. The owner judges each spike
+and finished feature with `/taste`, which saves to `docs/taste.md`. The
+playbook is the `orchestrate-postits` skill (`.claude/skills/orchestrate-postits/`);
+the scripts are in `scripts/orch/`; the orchestrator's state is
 `docs/orchestration/state.md`; the human-readable summary is
 `docs/orchestration/README.md`.
 
-- `scripts/orch/spawn.sh <feature> builder|reviewer` creates the worktree and
-  Herdr workspace above on first use, so don't create them by hand as well.
-- Each feature worktree has its own ports (`PORT`, `CLIENT_PORT`,
-  `VERIFY_SERVER_PORT`, `VERIFY_CLIENT_PORT`). Main keeps 8080/5173.
+- `scripts/orch/new-idea.sh <idea> "<seed>"` creates the worktree, and
+  `scripts/orch/spawn.sh <idea> <role>` opens the Herdr workspace on first use,
+  so don't create them by hand as well.
+- Each idea has its own ports (`PORT`, `CLIENT_PORT`, `VERIFY_SERVER_PORT`,
+  `VERIFY_CLIENT_PORT`); its spike uses those plus 5. Main keeps 8080/5173.
 - Workers commit in their worktree and never merge, push or rebase. Only the
   owner merges into `main`, after checking the feature by hand.
-- Checks: `pnpm check`. App verification: the `verify-postits` skill.
+- Whenever you show the owner something to judge, end with a reminder to run
+  `/taste` so their reaction is saved.
+- Checks: `mise exec -- pnpm check`. App verification: the `verify-postits` skill.

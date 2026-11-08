@@ -1,6 +1,7 @@
 # Brief: <feature>
 
-<!-- Copy to .claude/orch/<feature>/brief.md and fill every section.
+<!-- Copy to .claude/orch/<idea>/brief.md and fill every section from the
+     idea's decision.md and the owner's /taste notes on the spike.
      A section you cannot fill means the feature is not ready to spawn. -->
 
 ## Goal
@@ -28,7 +29,8 @@
 ## Acceptance
 
 <!-- Checkable lines. Each one is a test, a command with expected output, or a
-     step in the app with an expected result. -->
+     step in the app with an expected result. Start from decision.md's
+     "It works if" lines. -->
 
 - [ ]
 - [ ]
