@@ -493,3 +493,8 @@ takes longer than expected.
 to the demo accounts in the same change (e.g. step 3 seeds history, step 6
 seeds dust), so the demos always show everything that exists, and never
 something that doesn't yet.
+
+
+---
+
+another idea, is to proof in one sidebar (*right,) whenever click detail on one note, the sidebar will have proof section and comment section to make it interesting

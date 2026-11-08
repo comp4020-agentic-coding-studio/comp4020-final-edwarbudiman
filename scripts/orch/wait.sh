@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# wait.sh <feature> <builder|reviewer> [timeout-ms]
+# wait.sh <idea> <role> [timeout-ms]
 #
 # Blocks until the latest worker of that role settles, then checks its report.
-# Prints one line, "<feature> <role-round> <STATUS> ...", and exits:
+# Prints one line, "<idea> <role-round> <STATUS> ...", and exits:
 #   0  report present with this round's token
 #   2  worker is blocked on a dialog (the owner answers it)
 #   3  worker stopped without a fresh report
@@ -14,7 +14,7 @@ name="${1:-}"
 role="${2:-}"
 timeout="${3:-3600000}"
 check_name "$name"
-case "$role" in builder | reviewer) ;; *) die "usage: wait.sh <feature> <builder|reviewer> [timeout-ms]" ;; esac
+check_role "$role"
 need_herdr
 
 round="$(last_round "$name" "$role")"
@@ -35,8 +35,7 @@ herdr agent wait "$agent" --timeout "$timeout" >/dev/null 2>&1
 state="$(agent_status "$agent")"
 
 if report_fresh "$report" "$token"; then
-  status="$(header_field "$report" status)"
-  [ "$role" = reviewer ] && status="$(header_field "$report" verdict)"
+  status="$(header_field "$report" "$(report_key "$role")")"
   echo "$name $label ${status:-unknown} head=$(header_field "$report" head) report=$report"
   exit 0
 fi
