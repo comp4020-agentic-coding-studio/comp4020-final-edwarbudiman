@@ -12,6 +12,7 @@ import { attachRealtime, liveStats, userChanged } from "./realtime.ts";
 import { underPrefix } from "./routes.ts";
 import { getPageExists, serveClient, serveReadme } from "./static.ts";
 import { serveDocs } from "./docs.ts";
+import { serveLlmsTxt, serveOpenApi } from "./openapi.ts";
 import { negotiate, notFound, serveMarkdownTwin, serveRobots, serveSitemap } from "./discovery.ts";
 
 const db = openDb(config.dataDir);
@@ -205,6 +206,8 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
   // for agents (see routes.ts): each root file by name, never the SPA shell
   if (path === "/robots.txt") return serveRobots(req, res);
   if (path === "/sitemap.xml") return serveSitemap(req, res);
+  if (path === "/openapi.json") return serveOpenApi(req, res);
+  if (path === "/llms.txt") return serveLlmsTxt(req, res);
   if (path === "/index.md" || path === "/readme.md") return serveMarkdownTwin(req, res, path);
   if (underPrefix(path, ".well-known")) return notFound(req, res);
   if (underPrefix(path, "readme")) {

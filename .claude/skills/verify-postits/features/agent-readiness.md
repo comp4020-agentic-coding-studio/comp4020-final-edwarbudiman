@@ -34,3 +34,12 @@ Preconditions: baseline launch from `../SKILL.md`, an existing `demo1` / `demo2`
 - Canonical is lower case with no trailing slash: `/Demo1/` has `${ORIGIN}/demo1`.
 - Seeded users are `demo1` and `demo2`; `/demo` is a 404.
 - A repeated spec run against one server hits the signup limit (200 an hour per IP): start the server with `SIGNUP_LIMIT_PER_HOUR=5000`.
+
+## Part 2: /openapi.json and /llms.txt
+
+Curl against your local server (no browser needed):
+
+- `curl -si localhost:$PORT/openapi.json` gives `200 application/json`, `"openapi": "3.1.0"`, one path `/mcp` with `operationId` `callPostitsTool`.
+- `curl -si localhost:$PORT/llms.txt` gives `200 text/plain`, an H1 "Post-its" and a `## When to use Post-its` section.
+- `curl -sI -H 'Accept: text/html' localhost:$PORT/` has `</openapi.json>; rel="service-desc"` in `Link`.
+- `/sitemap.xml` lists both; `POST /openapi.json` gives 405.

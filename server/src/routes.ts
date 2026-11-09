@@ -25,7 +25,7 @@ export const SERVER_PAGES = ["readme", "docs"] as const;
 export const SERVER_ENDPOINTS = ["api", "ws", "healthz", "mcp"] as const;
 
 /** Files at the root that the server answers itself, for crawlers and agents. */
-export const SERVER_FILES = ["robots.txt", "sitemap.xml", "index.md", "readme.md"] as const;
+export const SERVER_FILES = ["robots.txt", "sitemap.xml", "index.md", "readme.md", "openapi.json", "llms.txt"] as const;
 
 /** Dot-directories the server owns: an unknown path under them is a 404, never the SPA. */
 export const SERVER_DOT_DIRS = [".well-known"] as const;

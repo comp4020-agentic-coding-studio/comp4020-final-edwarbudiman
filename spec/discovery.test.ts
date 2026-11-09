@@ -45,6 +45,11 @@ it("/sitemap.xml lists /readme/ and the current docs, and every listed page answ
   expect(urls.some((u) => u.startsWith(`${origin}/docs/features/`))).toBe(true);
   for (const u of urls) {
     const path = u.slice(origin.length);
+    // the agent files are plain text or JSON, not pages with a Markdown twin (spec/openapi.test.ts)
+    if (path === "/openapi.json" || path === "/llms.txt") {
+      expect((await get(path)).status, path).toBe(200);
+      continue;
+    }
     expect(path === "/readme/" || path.startsWith("/docs/"), path).toBe(true);
     // no old doc versions, no boards, no app pages
     expect(path, path).not.toMatch(/^\/docs\/v\d/);
@@ -163,7 +168,7 @@ it("Link alternate is set only when the .md twin exists, and every sitemap page'
   const sitemap = await (await get("/sitemap.xml")).text();
   const paths = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].replace(origin, ""));
   expect(paths.length).toBeGreaterThan(2);
-  for (const path of paths) {
+  for (const path of paths.filter((p) => p !== "/openapi.json" && p !== "/llms.txt")) {
     const link = (await get(path, BROWSER)).headers.get("link") ?? "";
     const target = link.match(/<([^>]+)>; rel="alternate"/)?.[1];
     expect(target, path).toBeTruthy();
