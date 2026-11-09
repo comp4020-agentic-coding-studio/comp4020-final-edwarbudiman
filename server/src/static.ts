@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, normalize, sep } from "node:path";
 import { marked } from "marked";
 import { config } from "./config.ts";
+import { injectHead } from "./discovery.ts";
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -133,7 +134,7 @@ export async function serveClient(req: IncomingMessage, res: ServerResponse, pat
     "frame-ancestors 'none'",
   ].join("; ");
   try {
-    const html = await readFile(index);
+    const html = injectHead(await readFile(index, "utf8"));
     res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache", "content-security-policy": csp });
     res.end(html);
   } catch {

@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, ApiError } from "../api.ts";
 import type { Me } from "../api.ts";
 import { Link, useSession } from "../router.tsx";
 import { Header } from "./Header.tsx";
 import { can3D, isSimple, setSimple } from "../space/viewMode.ts";
+import { mcpUrl, setupMessage } from "../agentSetup.ts";
+
+interface TokenInfo {
+  exists: boolean;
+  created_at: number | null;
+  last_used_at: number | null;
+}
+const when = (t: number | null) => (t === null ? "never" : new Date(t).toLocaleString());
 
 export function Settings() {
   const { me, setMe } = useSession();
@@ -13,6 +21,44 @@ export function Settings() {
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
   const [simple, setSimpleState] = useState(isSimple);
+
+  // the agent token: the raw token is shown once, right after it's made
+  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+  const [rawToken, setRawToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    api<TokenInfo>("GET", "/api/me/token").then(setTokenInfo).catch(() => setTokenInfo({ exists: false, created_at: null, last_used_at: null }));
+  }, []);
+  const message = rawToken ? setupMessage(location.origin, rawToken) : "";
+
+  async function makeToken() {
+    try {
+      const r = await api<{ token: string }>("POST", "/api/me/token");
+      setRawToken(r.token);
+      setCopied(false);
+      setTokenInfo(await api<TokenInfo>("GET", "/api/me/token"));
+    } catch (err) {
+      report(err);
+    }
+  }
+  async function revokeToken() {
+    try {
+      await api("DELETE", "/api/me/token");
+      setRawToken(null);
+      setTokenInfo({ exists: false, created_at: null, last_used_at: null });
+      setMsg({ ok: true, text: "Token revoked. Your agent can't reach your board any more." });
+    } catch (err) {
+      report(err);
+    }
+  }
+  async function copyMessage() {
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+    } catch {
+      setMsg({ ok: false, text: "Couldn't copy. Select the message and copy it yourself." });
+    }
+  }
 
   const report = (err: unknown) => setMsg({ ok: false, text: err instanceof ApiError ? err.message : "something went wrong" });
 
@@ -70,6 +116,51 @@ export function Settings() {
               <span className="hint">Your cursor shows as a nameless “someone”. Notes you write still show your name.</span>
             </span>
           </label>
+        </section>
+
+        <section className="card agent-card">
+          <h2>Connect your agent</h2>
+          <p className="hint">
+            Your own AI agent can read your board, move notes forward and add notes into your sections, acting as you with exactly your permissions. Everyone watching sees its changes marked as made by your agent.
+          </p>
+          {rawToken ? (
+            <>
+              <p className="hint">Paste this into a chat with your agent. It sets itself up. The token is shown only now.</p>
+              <textarea className="agent-message" readOnly rows={9} value={message} onFocus={(e) => e.currentTarget.select()} aria-label="Setup message for your agent" />
+              <div className="agent-actions">
+                <button type="button" className="primary" onClick={() => void copyMessage()}>
+                  {copied ? "Copied" : "Copy setup message"}
+                </button>
+                <button type="button" onClick={() => void makeToken()}>
+                  Make a new token
+                </button>
+                <button type="button" onClick={() => void revokeToken()}>
+                  Revoke
+                </button>
+              </div>
+            </>
+          ) : tokenInfo?.exists ? (
+            <>
+              <p className="hint">
+                An agent token is active. Made {when(tokenInfo.created_at)}, last used {when(tokenInfo.last_used_at)}. Its message was shown once; make a new token for a fresh one (the old one stops working at once).
+              </p>
+              <div className="agent-actions">
+                <button type="button" onClick={() => void makeToken()}>
+                  Make a new token
+                </button>
+                <button type="button" onClick={() => void revokeToken()}>
+                  Revoke
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="agent-actions">
+              <button type="button" className="primary" disabled={tokenInfo === null} onClick={() => void makeToken()}>
+                Make a token
+              </button>
+            </div>
+          )}
+          <p className="hint agent-url">MCP address: <code>{mcpUrl(location.origin)}</code></p>
         </section>
 
         <section className="card">

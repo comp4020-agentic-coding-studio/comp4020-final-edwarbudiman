@@ -93,6 +93,8 @@ export const hooks = {
   noteArrowsChanged: (_board: Board, _note: NoteRow): void => {},
   /** Something on a note's back side (status, proof, comments) changed. */
   sideChanged: (_board: Board, _note: NoteRow): void => {},
+  /** A user's agent changed this note through /mcp (`by` is null for an anonymous user). Drives the glow and tag. */
+  agentTouched: (_board: Board, _note: NoteRow, _by: string | null): void => {},
 };
 
 const BOARD_COLS = "b.id, b.kind, b.owner_id, u.username AS owner_name, b.slug, b.name, b.visibility, b.key_hash, b.description, b.created_at";

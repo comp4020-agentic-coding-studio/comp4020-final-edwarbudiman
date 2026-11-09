@@ -7,11 +7,23 @@
 /** Pages the server renders itself: the SPA loads them as real pages. */
 export const SERVER_PAGES = ["readme", "docs"] as const;
 
-/** Non-page paths the server owns: the API, the WebSocket and the health check. */
-export const SERVER_ENDPOINTS = ["api", "ws", "healthz"] as const;
+/** Non-page paths the server owns: the API, the WebSocket, the health check and the MCP endpoint. */
+export const SERVER_ENDPOINTS = ["api", "ws", "healthz", "mcp"] as const;
+
+/** Files at the root that the server answers itself, for crawlers and agents. */
+export const SERVER_FILES = ["robots.txt", "sitemap.xml", "index.md", "readme.md"] as const;
+
+/** Dot-directories the server owns: an unknown path under them is a 404, never the SPA. */
+export const SERVER_DOT_DIRS = [".well-known"] as const;
 
 /** App pages the SPA serves at the top level, next to users' boards. */
 export const SPA_PAGES = ["settings", "stats", "login", "signup"] as const;
 
 /** Vite proxy key for a server path: anchored so /docs-x and /readmex stay boards. */
 export const proxyKey = (name: string): string => `^/${name}(/|$)`;
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Vite proxy key for a root file (/robots.txt) or dot-directory (/.well-known): anchored the same way. */
+export const fileProxyKey = (name: string): string => `^/${escapeRe(name)}$`;
+export const dotDirProxyKey = (name: string): string => `^/${escapeRe(name)}(/|$)`;

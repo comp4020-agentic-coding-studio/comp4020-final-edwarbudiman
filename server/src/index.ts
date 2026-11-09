@@ -1,16 +1,18 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { changePassword, login, logout, publicUser, requireUser, seedDemo, signup, updateMe } from "./auth.ts";
+import { apiTokenInfo, changePassword, login, logout, makeApiToken, publicUser, requireUser, revokeApiToken, seedDemo, signup, updateMe } from "./auth.ts";
+import { handleMcp } from "./agent.ts";
 import { channelBoard, createArrow, createChannel, createNote, createSection, deleteArrow, deleteSection, updateSection, deleteNote, updateArrow, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
 import { addComment, deleteComment, editComment, readSide, setProof, setStatus } from "./side.ts";
 import { config } from "./config.ts";
 import { openDb } from "./db.ts";
 import { HttpError, readJson, sameOrigin, sendJson } from "./http.ts";
-import { logEvent, recentActionCounts } from "./log.ts";
+import { logAction, logEvent, recentActionCounts } from "./log.ts";
 import { attachRealtime, liveStats, userChanged } from "./realtime.ts";
 import { underPrefix } from "./routes.ts";
 import { serveClient, serveReadme } from "./static.ts";
 import { serveDocs } from "./docs.ts";
+import { negotiate, notFound, serveMarkdownTwin, serveRobots, serveSitemap } from "./discovery.ts";
 
 const db = openDb(config.dataDir);
 await seedDemo(db);
@@ -30,6 +32,20 @@ route("PATCH", /^\/api\/me$/, async (req, res) => {
   const user = updateMe(db, requireUser(db, req), await readJson(req));
   userChanged(user.id);
   sendJson(res, 200, { user: publicUser(user, true) });
+});
+// the token for the person's own agent (cookie session only; /mcp is where it's used)
+route("GET", /^\/api\/me\/token$/, (req, res) => sendJson(res, 200, apiTokenInfo(db, requireUser(db, req).id)));
+route("POST", /^\/api\/me\/token$/, (req, res) => {
+  const user = requireUser(db, req);
+  const token = makeApiToken(db, user.id);
+  logAction(user.username, "settings.token.create");
+  sendJson(res, 200, { token });
+});
+route("DELETE", /^\/api\/me\/token$/, (req, res) => {
+  const user = requireUser(db, req);
+  revokeApiToken(db, user.id);
+  logAction(user.username, "settings.token.revoke");
+  res.writeHead(204, { "cache-control": "no-store" }).end();
 });
 route("POST", /^\/api\/me\/password$/, async (req, res) => {
   const user = requireUser(db, req);
@@ -178,9 +194,24 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
     }
     throw new HttpError(pathMatched ? 405 : 404, pathMatched ? "method not allowed" : "no such endpoint");
   }
+  // the agent endpoint: no Origin needed (agents aren't browsers), its own auth
+  if (path === "/mcp") return handleMcp(db, req, res);
   if (method !== "GET" && method !== "HEAD") throw new HttpError(405, "method not allowed");
-  if (underPrefix(path, "readme")) return serveReadme(req, res, path);
-  if (underPrefix(path, "docs")) return serveDocs(req, res, path);
+  // for agents (see routes.ts): each root file by name, never the SPA shell
+  if (path === "/robots.txt") return serveRobots(req, res);
+  if (path === "/sitemap.xml") return serveSitemap(req, res);
+  if (path === "/index.md" || path === "/readme.md") return serveMarkdownTwin(req, res, path);
+  if (underPrefix(path, ".well-known")) return notFound(req, res);
+  if (underPrefix(path, "readme")) {
+    if (await negotiate(req, res, path)) return;
+    return serveReadme(req, res, path);
+  }
+  if (underPrefix(path, "docs")) {
+    if (path.endsWith(".md")) return serveMarkdownTwin(req, res, path);
+    if (await negotiate(req, res, path)) return;
+    return serveDocs(req, res, path);
+  }
+  if (path === "/" && (await negotiate(req, res, path))) return;
   return serveClient(req, res, path);
 }
 

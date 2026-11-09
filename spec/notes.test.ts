@@ -95,7 +95,9 @@ describe("notes on user boards", () => {
     for (const path of ["/api/me", "/api/users", `/api/boards/user/${a.username}`, "/api/channels", "/api/stats"]) {
       const r = await a.call("GET", path);
       expect(r.status).toBe(200);
-      expect(JSON.stringify(r.body)).not.toMatch(/pw_hash|password/i);
+      // the stats page counts actions by name (one is "settings.password"), which is a name and not a leak
+      const body = path === "/api/stats" ? { ...r.body, actionsLastHour: undefined } : r.body;
+      expect(JSON.stringify(body)).not.toMatch(/pw_hash|password/i);
     }
     const bad = await rawCall("POST", "/api/login", { username: a.username, password: "wrong-password" });
     expect(bad.status).toBe(401);

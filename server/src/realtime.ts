@@ -439,6 +439,11 @@ export function attachRealtime(server: Server, database: DB): void {
       if (canSee(board, note, c.user.id)) send(c, { type: "note:side", id: note.id, summary: noteSummary(db, note, c.user.id) });
     }
   };
+  // An agent made a change through /mcp. The change itself went out as its
+  // normal message; this only tells viewers who can see the note to mark it.
+  hooks.agentTouched = (board, note, by) => {
+    toViewers(board, note, () => ({ type: "agent:touch", noteId: note.id, by }));
+  };
   hooks.noteDeleted = (board, note) => {
     const lock = locks.get(note.id);
     if (lock) {

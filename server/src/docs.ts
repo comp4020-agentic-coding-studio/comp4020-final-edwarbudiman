@@ -18,7 +18,8 @@ import { config } from "./config.ts";
  *                                       "date": "...", "note": "..." }, ...]
  *                                    newest first; the first is the current one
  *
- * In each version folder: *.md (general pages), features/*.md, roles/*.md.
+ * In each version folder: *.md (general pages), features/*.md, roles/*.md,
+ * agents/*.md (for people wiring Post-its into their own agent).
  * Each page may start with front matter:
  *
  *   ---
@@ -36,9 +37,9 @@ import { config } from "./config.ts";
 const SITE = () => join(config.rootDir, "docs", "site");
 const ASSETS = () => join(config.rootDir, "docs", "readme-assets");
 
-const SECTIONS = ["features", "roles"] as const;
+const SECTIONS = ["features", "roles", "agents"] as const;
 type Section = "" | (typeof SECTIONS)[number];
-const SECTION_LABEL: Record<Section, string> = { features: "Features", roles: "Roles", "": "How it's built" };
+const SECTION_LABEL: Record<Section, string> = { features: "Features", roles: "Roles", agents: "Agents", "": "How it's built" };
 
 type Page = {
   slug: string;
@@ -310,6 +311,7 @@ function layout(o: { title: string; prefix: string; current: string; side: strin
       <a class="navbar__brand" href="${o.prefix}"><span class="navbar__logo" aria-hidden="true"></span><b class="navbar__title">Post-its docs</b></a>
       <a class="navbar__item navbar__link${active("features")}" href="${o.prefix}features/">Features</a>
       <a class="navbar__item navbar__link${active("roles")}" href="${o.prefix}roles/">Roles</a>
+      <a class="navbar__item navbar__link${active("agents")}" href="${o.prefix}agents/">Agents</a>
       <a class="navbar__item navbar__link nav-wide${o.current === `${o.prefix}pipeline/` ? " navbar__link--active" : ""}" href="${o.prefix}pipeline/">Pipeline</a>
     </div>
     <div class="navbar__items navbar__items--right">
@@ -365,8 +367,39 @@ function redirect(res: ServerResponse, location: string): void {
 
 const SECTION_INTRO: Record<string, string> = {
   features: "# Features\n\nEverything you can do on a board. Pick one for what it does, how to use it, and a demo.\n",
+  agents: "# Agents\n\nPages for people wiring Post-its into their own agent: how an agent finds the site, reads its docs and, later, signs in.\n",
   roles: "# Roles\n\nEach feature is built by a small team of agents, each with one job and one instruction file. I'm the owner: I make the product calls and do every merge.\n",
 };
+
+/** URL of the Markdown twin of a docs page: /docs/ is /docs/index.md, /docs/a/b/ is /docs/a/b.md. */
+export const docsMarkdownUrl = (htmlPath: string): string =>
+  htmlPath.endsWith("/") && htmlPath.split("/").filter(Boolean).length === 1 ? `${htmlPath}index.md` : `${htmlPath.replace(/\/$/, "")}.md`;
+
+/**
+ * Every page of the current version as Markdown, keyed by its HTML path
+ * (/docs/, /docs/features/, /docs/features/notes/). The source on disk with its
+ * front matter removed, plus a list of links for a section's index page. Older
+ * versions and the versions table are not here.
+ */
+export async function currentDocsMarkdown(): Promise<Map<string, string>> {
+  const versions = await loadVersions();
+  const dir = versionDir(versions, versions[0]);
+  const prefix = base(versions, versions[0]);
+  const [general, ...sectioned] = await Promise.all([loadSection(dir, ""), ...SECTIONS.map((s) => loadSection(dir, s))]);
+  const out = new Map<string, string>();
+  for (const p of general) out.set(hrefIn(prefix, p), p.body);
+  SECTIONS.forEach((sec, i) => {
+    const pool = sectioned[i];
+    const own = pool.find((p) => p.slug === "index");
+    const list = pool
+      .filter((p) => p.slug !== "index")
+      .map((p) => `- [${p.title}](${docsMarkdownUrl(hrefIn(prefix, p))})${(sec === "roles" ? p.meta.tagline : p.meta.summary) ? `: ${sec === "roles" ? p.meta.tagline : p.meta.summary}` : ""}`)
+      .join("\n");
+    out.set(`${prefix}${sec}/`, `${own?.body ?? SECTION_INTRO[sec]}\n${list}\n`);
+    for (const p of pool) if (p.slug !== "index") out.set(hrefIn(prefix, p), p.body);
+  });
+  return out;
+}
 
 export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (path === "/docs") return redirect(res, "/docs/");
@@ -402,6 +435,7 @@ export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path
   const groups: [Section, Page[]][] = [
     ["features", bySection.get("features") ?? []],
     ["roles", bySection.get("roles") ?? []],
+    ["agents", bySection.get("agents") ?? []],
     ["", general],
   ];
 
@@ -420,7 +454,6 @@ export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path
     const slug = parts[1] ?? "index";
     page = pool.find((p) => p.slug === slug);
     if (!page && slug === "index") {
-      if (!pool.length) return notFound(res);
       page = { slug: "index", section: parts[0], meta: {}, title: SECTION_LABEL[parts[0]], order: 0, body: SECTION_INTRO[parts[0]] };
     }
     if (page && slug === "index") extra = cards(pool, prefix);
