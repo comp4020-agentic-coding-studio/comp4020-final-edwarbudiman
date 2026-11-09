@@ -6,7 +6,7 @@ import type { DB } from "./db.ts";
 import { tx } from "./db.ts";
 import { HttpError, clientIp, isHttps, parseCookies, sendJson, str } from "./http.ts";
 import { logAction } from "./log.ts";
-import { SERVER_ENDPOINTS, SERVER_PAGES, SPA_PAGES } from "./routes.ts";
+import { SERVER_DOT_DIRS, SERVER_FILES, SERVER_ENDPOINTS, SERVER_PAGES, SPA_PAGES } from "./routes.ts";
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, keylen: number, opts: object) => Promise<Buffer>;
 
@@ -60,7 +60,7 @@ export const USERNAME_RE = /^[a-z0-9_-]{3,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // a user's board lives at /<username>, so these would collide with the app's own pages
-export const RESERVED_USERNAMES = new Set<string>([...SPA_PAGES, ...SERVER_PAGES, ...SERVER_ENDPOINTS, "logout", "assets", "admin", "help", "about", "new"]);
+export const RESERVED_USERNAMES = new Set<string>([...SPA_PAGES, ...SERVER_PAGES, ...SERVER_ENDPOINTS, ...SERVER_FILES, ...SERVER_DOT_DIRS, "logout", "assets", "admin", "help", "about", "new"]);
 
 export function normaliseUsername(raw: unknown): string {
   if (typeof raw !== "string") throw new HttpError(400, "username is required");
