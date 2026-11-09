@@ -135,6 +135,64 @@ export function requireUser(db: DB, req: IncomingMessage): User {
   return user;
 }
 
+// ---------------------------------------------------------------- API tokens
+
+// One token per user, for their own agent over /mcp. It acts as the person:
+// the same User comes out, so every access rule applies unchanged.
+
+const TOKEN_PREFIX = "pi_";
+const TOUCH_EVERY_MS = 60_000;
+
+export interface TokenInfo {
+  exists: boolean;
+  created_at: number | null;
+  last_used_at: number | null;
+}
+
+/** Make the user's token, replacing any old one. The raw token is returned once and never stored. */
+export function makeApiToken(db: DB, userId: number): string {
+  const token = TOKEN_PREFIX + randomBytes(24).toString("base64url");
+  db.prepare(
+    "INSERT INTO api_tokens (user_id, token_hash, created_at, last_used_at) VALUES (?, ?, ?, NULL) ON CONFLICT (user_id) DO UPDATE SET token_hash = excluded.token_hash, created_at = excluded.created_at, last_used_at = NULL",
+  ).run(userId, sha256(token), Date.now());
+  return token;
+}
+
+export function revokeApiToken(db: DB, userId: number): void {
+  db.prepare("DELETE FROM api_tokens WHERE user_id = ?").run(userId);
+}
+
+export function apiTokenInfo(db: DB, userId: number): TokenInfo {
+  const row = db.prepare("SELECT created_at, last_used_at FROM api_tokens WHERE user_id = ?").get(userId) as { created_at: number; last_used_at: number | null } | undefined;
+  return row ? { exists: true, created_at: row.created_at, last_used_at: row.last_used_at } : { exists: false, created_at: null, last_used_at: null };
+}
+
+/** The user a bearer token belongs to, or null. Notes the use at most once a minute. */
+function tokenUser(db: DB, token: string): User | null {
+  const hash = sha256(token);
+  const row = db.prepare("SELECT user_id FROM api_tokens WHERE token_hash = ?").get(hash) as { user_id: number } | undefined;
+  if (!row) return null;
+  const now = Date.now();
+  db.prepare("UPDATE api_tokens SET last_used_at = ? WHERE user_id = ? AND (last_used_at IS NULL OR last_used_at < ?)").run(now, row.user_id, now - TOUCH_EVERY_MS);
+  return getUser(db, row.user_id) ?? null;
+}
+
+/**
+ * For /mcp only: the user behind `Authorization: Bearer <token>`, else the
+ * `sid` cookie. A bearer header that doesn't match a token fails outright,
+ * it never falls back to a cookie. The /api routes keep using requireUser.
+ */
+export function requireUserAny(db: DB, req: IncomingMessage): User {
+  const header = req.headers.authorization;
+  if (header !== undefined) {
+    const m = /^Bearer\s+(\S+)$/i.exec(header);
+    const user = m ? tokenUser(db, m[1]) : null;
+    if (!user) throw new HttpError(401, "missing, wrong or revoked token");
+    return user;
+  }
+  return requireUser(db, req);
+}
+
 export function getUser(db: DB, id: number): User | undefined {
   return db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = ?`).get(id) as User | undefined;
 }
@@ -266,6 +324,7 @@ export async function changePassword(db: DB, req: IncomingMessage, res: ServerRe
   tx(db, () => {
     db.prepare("UPDATE users SET pw_hash = ? WHERE id = ?").run(hash, user.id);
     db.prepare("DELETE FROM sessions WHERE user_id = ?").run(user.id);
+    db.prepare("DELETE FROM api_tokens WHERE user_id = ?").run(user.id); // the agent's token goes with the old password
   });
   logAction(user.username, "settings.password");
   sendJson(res, 200, { ok: true }, { "set-cookie": startSession(db, req, user.id) });

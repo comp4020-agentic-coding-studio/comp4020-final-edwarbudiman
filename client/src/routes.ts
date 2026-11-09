@@ -7,8 +7,8 @@
 /** Pages the server renders itself: the SPA loads them as real pages. */
 export const SERVER_PAGES = ["readme", "docs"] as const;
 
-/** Non-page paths the server owns: the API, the WebSocket and the health check. */
-export const SERVER_ENDPOINTS = ["api", "ws", "healthz"] as const;
+/** Non-page paths the server owns: the API, the WebSocket, the health check and the MCP endpoint. */
+export const SERVER_ENDPOINTS = ["api", "ws", "healthz", "mcp"] as const;
 
 /** App pages the SPA serves at the top level, next to users' boards. */
 export const SPA_PAGES = ["settings", "stats", "login", "signup"] as const;

@@ -2361,3 +2361,42 @@ button.board-title svg {
     transition: none;
   }
 }
+
+/* agent-mcp: a note someone's agent just changed glows purple, with a tag.
+   Two keyframe names alternate, so a second touch restarts the glow. */
+.note.agent-glow-0 { animation: agent-glow-0 3.5s ease-out; }
+.note.agent-glow-1 { animation: agent-glow-1 3.5s ease-out; }
+@keyframes agent-glow-0 {
+  0% { box-shadow: 0 0 0 3px #7c5cff, 0 0 28px 8px rgba(124, 92, 255, 0.75); }
+  70% { box-shadow: 0 0 0 3px #7c5cff, 0 0 18px 4px rgba(124, 92, 255, 0.4); }
+  100% { box-shadow: var(--note-edge), var(--note-shadow); }
+}
+@keyframes agent-glow-1 {
+  0% { box-shadow: 0 0 0 3px #7c5cff, 0 0 28px 8px rgba(124, 92, 255, 0.75); }
+  70% { box-shadow: 0 0 0 3px #7c5cff, 0 0 18px 4px rgba(124, 92, 255, 0.4); }
+  100% { box-shadow: var(--note-edge), var(--note-shadow); }
+}
+.agent-tag {
+  position: absolute;
+  top: -11px;
+  right: 8px;
+  z-index: 2;
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: #7c5cff;
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: agent-tag 3.5s ease-out forwards;
+}
+@keyframes agent-tag {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .note.agent-glow-0, .note.agent-glow-1 { animation: none; box-shadow: 0 0 0 3px #7c5cff; }
+}
+.agent-message { width: 100%; box-sizing: border-box; font: 12px/1.4 ui-monospace, Menlo, monospace; resize: vertical; }
+.agent-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.agent-url code { word-break: break-all; }

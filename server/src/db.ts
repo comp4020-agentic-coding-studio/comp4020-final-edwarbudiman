@@ -151,6 +151,17 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX board_sections_board ON board_sections(board_id);
   `,
+  // 9: one personal API token per user, for their own agent over /mcp. Only
+  // the sha256 of the token is kept, as with sessions; a new token replaces the
+  // old one, and a password change deletes it.
+  `
+  CREATE TABLE api_tokens (
+    user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    token_hash   TEXT NOT NULL UNIQUE,
+    created_at   INTEGER NOT NULL,
+    last_used_at INTEGER
+  );
+  `,
 ];
 
 export function openDb(dataDir: string): DB {
