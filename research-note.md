@@ -41,10 +41,15 @@ increasingly packaged workflows. Matt Pocock's skills (2026) ship a `grill-me`
 skill that interrogates a plan before any code is written; Lauren Tan's pstack
 (2026) ships playbooks, principle skills and per-role model budgets. These are
 guides in Böckeler's sense, and good ones, but they share a limit: a guide
-cannot tell you when it has stopped working. Running several agent sessions in
-parallel, as terminal multiplexers like Herdr encourage, sharpens this. A
-person cannot read every pane, so whatever is not caught by a sensor is simply
-not caught.
+cannot tell you when it has stopped working. Practitioner channels make the
+limit worse. New skills arrive weekly through posts on X and skill
+registries, and installing one costs a single command, so a practitioner's
+local harness piles up with guides that were tried once and never shown to
+help. In my own project most of these experiments never reached a pull
+request. What sorted them was not reading more but a workflow with sensors in
+it: a throwaway spike, an owner's judgement, a review, and only then a merge.
+Running several agent sessions in parallel, as terminal multiplexers like
+Herdr encourage, sharpens the need, because a person cannot read every pane.
 
 ## Retrospection as a sensor on the harness
 
@@ -69,13 +74,12 @@ establish whether a change helps".
 
 ## Where this leaves good practice
 
-Read together, these sources argue for a specific discipline rather than a tool.
-Prefer a stable harness over an open one until the open one stabilises. Treat
-skills and `CLAUDE.md` as guides that decay. Run a retrospective after every
-session, because the evidence says it surfaces real faults. Then do what
-neither Pocock nor most practitioner writing yet asks for: keep only the
-changes that are repository-scoped and checkable, and re-test them on later
-work. The open question, which Böckeler and Treude and Baltes both leave
+Together, these sources argue for a discipline rather than a tool. Prefer a
+stable harness until an open one stabilises. Treat skills and `CLAUDE.md` as
+guides that decay. Run a retrospective after every session, because it
+surfaces real faults. Then do what most practitioner writing does not yet ask
+for: keep only changes that are repository-scoped and checkable, and re-test
+them on later work. The open question, which Böckeler and Treude and Baltes both leave
 unanswered, is how to measure a harness well enough to know when to delete
 from it.
 
