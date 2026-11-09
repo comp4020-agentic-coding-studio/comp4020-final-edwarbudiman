@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { baseUrl, boardOf, signup } from "./helpers.ts";
 
@@ -201,4 +201,33 @@ it("the app shell carries description, canonical and Open Graph tags built from 
   expect(html).toContain(`<link rel="canonical" href="${origin}/" />`);
   for (const p of ["og:title", "og:description", "og:type", "og:url"]) expect(html, p).toContain(`property="${p}"`);
   expect(html).toContain(`<meta property="og:url" content="${origin}/" />`);
+});
+
+it("the docs have an Agents section: navbar link, index, sitemap entry and .md twin, empty or not", async () => {
+  const page = await get("/docs/agents/", BROWSER);
+  expect(page.status).toBe(200);
+  expect(page.headers.get("content-type")).toMatch(/^text\/html/);
+  expect(await page.text()).toContain('<a class="navbar__item navbar__link navbar__link--active" href="/docs/agents/">Agents</a>');
+  // the link is in the navbar of every docs page, not only its own
+  expect(await (await get("/docs/features/notes/", BROWSER)).text()).toContain('href="/docs/agents/">Agents</a>');
+
+  const twin = await get("/docs/agents.md");
+  expect(twin.status).toBe(200);
+  expect(twin.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+  expect(await twin.text()).toMatch(/^# Agents/);
+
+  const urls = [...(await (await get("/sitemap.xml")).text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  expect(urls).toContain(`${origin}/docs/agents/`);
+
+  // every page that exists in docs/site/agents/ is listed, renders, and has a twin
+  const dir = new URL("../docs/site/agents/", import.meta.url);
+  const slugs = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).filter((s) => s !== "index") : [];
+  for (const slug of slugs) {
+    expect(urls, slug).toContain(`${origin}/docs/agents/${slug}/`);
+    expect((await get(`/docs/agents/${slug}/`, BROWSER)).status, slug).toBe(200);
+    const md = await get(`/docs/agents/${slug}.md`);
+    expect(md.status, slug).toBe(200);
+    expect(md.headers.get("content-type"), slug).toMatch(/^text\/markdown/);
+    expect(await (await get("/docs/agents/", MD)).text(), slug).toContain(`/docs/agents/${slug}.md`);
+  }
 });
