@@ -473,6 +473,43 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     if (el) fitTo(Object.values(notesRef.current), el.clientWidth, el.clientHeight);
   }
 
+  /** Ease the view to `to` over ~320 ms (a jump with reduced motion). Any other change to the view (pan, zoom, drag) cancels it. */
+  const animRef = useRef(0);
+  function animateView(to: View) {
+    cancelAnimationFrame(animRef.current);
+    const from = viewRef.current;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return setView(to);
+    const t0 = performance.now();
+    const DUR = 320;
+    let last = from;
+    const tick = (now: number) => {
+      if (viewRef.current !== last) return; // someone else moved the view: let go
+      const k = Math.min(1, (now - t0) / DUR);
+      const e = 1 - Math.pow(1 - k, 3); // ease-out cubic
+      last = k === 1 ? to : { ox: from.ox + (to.ox - from.ox) * e, oy: from.oy + (to.oy - from.oy) * e, s: from.s + (to.s - from.s) * e };
+      setView(last);
+      if (k < 1) animRef.current = requestAnimationFrame(tick);
+    };
+    animRef.current = requestAnimationFrame(tick);
+  }
+  useEffect(() => () => cancelAnimationFrame(animRef.current), []);
+
+  /** Pan and zoom so the ticked sections (their rectangles, not the notes inside) fill the view with a 40px margin; never zoom in past 1. */
+  function frameSections(ids: Set<string>) {
+    const el = viewportRef.current;
+    const list = sectionsRef.current.filter((c) => ids.has(String(c.id)));
+    if (!el || list.length === 0) return;
+    const w = el.clientWidth;
+    const h = el.clientHeight;
+    const minX = Math.min(...list.map((c) => c.x));
+    const minY = Math.min(...list.map((c) => c.y));
+    const maxX = Math.max(...list.map((c) => c.x + c.w));
+    const maxY = Math.max(...list.map((c) => c.y + c.h));
+    const M = 40;
+    const s = clamp(Math.min((w - 2 * M) / (maxX - minX), (h - 2 * M) / (maxY - minY), 1), MIN_SCALE, MAX_SCALE);
+    animateView({ s, ox: w / 2 - ((minX + maxX) / 2) * s, oy: h / 2 - ((minY + maxY) / 2) * s });
+  }
+
   useEffect(() => {
     void load(true);
   }, [load]);
@@ -2218,7 +2255,10 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
               sections={sections.map((c) => ({ id: String(c.id), name: c.name, color: c.color, count: sorted.filter((n) => secOf(n)?.id === c.id).length }))}
               filter={filter}
               hidden={hiddenCount}
-              onChange={(f) => setFilter(f)}
+              onChange={(f) => {
+                setFilter(f);
+                if (f.size) frameSections(f); // only a tick or untick here frames; clearing leaves the view
+              }}
               onClose={() => setFilterOpen(false)}
             />
           )}

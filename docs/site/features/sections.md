@@ -25,6 +25,7 @@ Where a note sits is how you group it, so I gave the board a way to say so out l
 - Zones never overlap. If you draw, move or resize one onto another, it snaps back, a red "Sections can't overlap" message shows at the top and the zone flashes red. Touching edges is fine.
 - On your own board only you can draw, move, resize, rename or delete sections. In a channel, any member can. Visitors see the zones and can filter by them, but get no Section tool and no controls.
 - Filtering only changes your view, and it is remembered for the board in this browser tab.
+- Ticking a section in the filter also pans and zooms the board to fit it. Tick two and the view zooms out to show both. Clearing the filter leaves the view where it is.
 - Membership is worked out from position and never stored, so moving a note across a zone's edge changes its group.
 - Notes no longer show label chips, and there is no Label button or **L** key. Labels that notes already had are kept in the database but aren't shown or converted.
 
