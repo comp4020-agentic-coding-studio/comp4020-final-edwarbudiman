@@ -72,6 +72,21 @@ The other people's skills did not disappear. They became parts of my
 pipeline: pstack's per-role model settings decide which model each role uses,
 and Matt Pocock's `/retro` now runs at the end of every idea.
 
+## What came out of it
+
+Some of what the board does now:
+
+- **Live cursors.** Other people on your board show up as cursors with
+  avatars, so you can see who is there with you
+  ([`957d95c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/957d95c)).
+- **Channels.** A sidebar of channels with unread counts, for talking around
+  the board
+  ([`19926ac`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/19926ac)).
+- **Note sidebar.** Each note has a back side where you can show proof that
+  it is done, say you are on it, and comment on it. It was the first feature
+  to go through the whole pipeline and arrive as a pull request
+  ([`0167ee3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/0167ee3)).
+
 ## Documentation as part of shipping
 
 I also wanted each feature to explain itself, so I added a docs site at
