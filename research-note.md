@@ -48,11 +48,6 @@ overprompting he describes. What worked was to sit down, try them, and keep
 only what I actually needed in my own pipeline. Once I wrote my own roles
 and scripts, the work started moving.
 
-He also warns that parallel sessions "only pay off once a single session can
-finish without you". This is a fair check on my pipeline, which runs several
-roles side by side. It only works because each role has a clear goal and a
-check it can run on its own, and because I step in only at the taste gates.
-
 Wang et al. (2023) show a similar thing with Voyager, an agent that plays
 Minecraft. It does not start with a fixed set of skills. It writes its own
 skills as code, tests them, keeps the ones that work, and builds new skills
@@ -64,12 +59,23 @@ My pipeline grew the same way. Each skill and role came from a problem I hit:
 restart, and `/retro` after reflection kept looking at the code instead of
 the setup.
 
+## The counter-case
+
+There is a strong argument against all of this. Every time the model
+updates, a personal setup can stop being relevant. Osmani's own advice is to
+remove instructions written for older models, so the skills I wrote for
+today's model may be the overprompting of the next one. My answer is that
+the skills themselves will go out of date, but the habit of building and
+checking them does not. Next time, I would build a pipeline whose job is to
+re-learn the AI: take my previous setup, run it against the new version, and
+keep only what the new model still needs. A retro already does this for one
+session, and the same idea can work for each new model.
+
 ## What I take from this
 
-A setup works best when it is personal and when it learns from each session.
-Borrowed skills are a good place to start, but they need to become your own.
-A retro is how the setup keeps learning, as long as I check that its changes
-really help.
+A setup works best when it is personal and when it keeps learning, from each
+session and from each new model. Borrowed skills are a good place to start,
+but they need to become your own.
 
 ## References
 
