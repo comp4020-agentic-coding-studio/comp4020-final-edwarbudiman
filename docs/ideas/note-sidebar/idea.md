@@ -1,0 +1,7 @@
+# Idea: note-sidebar
+
+Started 2026-11-05 by the owner.
+
+## Seed
+
+A right-hand sidebar that gives every note a 'back side' with two sections: Proof and Comments. From the owner's line in more-ideas.md: 'proof in one sidebar (right) whenever click detail on one note, the sidebar will have proof section and comment section to make it interesting'. Owner decisions from the brainstorm (2026-11-05): (1) Proof is optional and free-form, any note can have it at any time, not tied to status. (2) Proof can be text or an image. (3) Comments: anyone who can see the note can comment; people edit/delete only their own comments; the board owner can delete any comment. (4) A single click on a note opens the sidebar. Orchestrator defaults, open to change: only a click without movement opens it (drag, box-select and Shift-click never do); Esc or clicking empty canvas closes it; clicking another note while it is open switches to that note; images shrunk in the browser to about 200 KB, a small cap (~5) of proof items per note, stored in SQLite to fit the 256 MB machine; a small marker on the note (comment count, proof icon) so the board shows it without opening; comments and proof sync live and survive reload; private notes keep their comments and proof private; bottom sheet on phones. Out on purpose: reactions, @mentions, assignees, due dates (it must not become Trello). Links to the parked job-board idea in docs/rejected.md, since proof could later back job approval, but approval is not in scope.

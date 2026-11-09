@@ -21,6 +21,14 @@ throwaway `/data`, and a red run blocks the deploy. Locally, start the app
 however you run it and `pnpm check` finds it at `APP_URL` (default
 `http://localhost:8080`). Keep them; don't delete them.
 
+## Route guard
+
+`routes.test.ts` fails when the top-level paths drift apart: the server's own
+pages (`server/src/routes.ts`, dispatched in `index.ts`), the browser's copy
+(`client/src/routes.ts`), the anchored Vite dev proxy keys, the SPA's page list
+and `RESERVED_USERNAMES`. Adding a top-level route? Follow the note at the top
+of `server/src/routes.ts`, and the spec says what you missed.
+
 ## Your checks
 
 Everything else in `spec/` is yours to write. Any `spec/*.test.ts` runs with
