@@ -199,7 +199,7 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
   // a path that wouldn't exist under GET is a 404 whatever the method; only a
   // path that does exist can be answered 405
   if (method !== "GET" && method !== "HEAD") {
-    if (!getPageExists(db, path)) return notFound(req, res);
+    if (!(await getPageExists(db, path))) return notFound(req, res);
     throw new HttpError(405, "method not allowed");
   }
   // for agents (see routes.ts): each root file by name, never the SPA shell

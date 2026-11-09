@@ -13,7 +13,7 @@ const origin = (await (await get("/robots.txt")).text()).match(/^Sitemap: (https
 const user = await signup("rdy");
 const channel = (await user.call("POST", "/api/channels", { name: uniqueName("rdychan"), visibility: "public" })).body.board.slug as string;
 
-const root = (html: string): string => html.match(/<div id="root">([\s\S]*?)<\/div>\s*<noscript>/)?.[1] ?? "";
+const root = (html: string): string => html.match(/<div id="root"[^>]*>([\s\S]*?)<\/div>\s*<noscript>/)?.[1] ?? "";
 const visibleText = (html: string): string => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
 it("Accept: text/markdown on a missing path is a 404 Markdown page that links the docs and sitemap", async () => {
@@ -161,4 +161,33 @@ it("HEAD on a missing page is a 404 without a body", async () => {
   const res = await get("/this-page-does-not-exist-xyz", BROWSER, "HEAD");
   expect(res.status).toBe(404);
   expect(await res.text()).toBe("");
+});
+
+it("non-GET on a missing /docs or /readme path is 404; on a real one it is 405", async () => {
+  for (const [method, path] of [["POST", "/docs/nope/"], ["PUT", "/docs/nope/"], ["POST", "/readme/nope"], ["POST", "/docs/nope/index.md"], ["POST", "/docs/features/nope.md"]]) {
+    const res = await get(path, MD, method);
+    expect(res.status, `${method} ${path}`).toBe(404);
+    expect(res.headers.get("vary"), `${method} ${path}`).toBe("Accept");
+  }
+  for (const path of ["/docs/", "/readme/"]) expect((await get(path, MD, "POST")).status, path).toBe(405);
+});
+
+it("private channels look like missing ones: key and list channels are 404, public is 200", async () => {
+  const key = (await user.call("POST", "/api/channels", { name: uniqueName("rdykey"), visibility: "key", key: "sesame-key" })).body.board.slug as string;
+  const list = (await user.call("POST", "/api/channels", { name: uniqueName("rdylist"), visibility: "list" })).body.board.slug as string;
+  for (const slug of [key, list, "nosuch-xyz"]) {
+    const res = await get(`/c/${slug}`, BROWSER);
+    expect(res.status, slug).toBe(404);
+    const html = await res.text();
+    expect(html, slug).toContain("No such board");
+    expect(html, slug).toContain('data-status="404"');
+  }
+  const open = await get(`/c/${channel}`, BROWSER);
+  expect(open.status).toBe(200);
+  expect(await open.text()).not.toContain('data-status="404"');
+});
+
+it("canonical is lower case and has no trailing slash", async () => {
+  const html = await (await get(`/${user.username.toUpperCase()}/`, BROWSER)).text();
+  expect(html).toContain(`<link rel="canonical" href="${origin}/${user.username.toLowerCase()}" />`);
 });

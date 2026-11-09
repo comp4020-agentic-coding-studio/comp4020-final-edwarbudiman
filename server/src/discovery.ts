@@ -125,7 +125,10 @@ export interface HeadOptions {
 }
 
 const HEAD_TAGS = ({ path, status }: HeadOptions): string => {
-  const self = path === "/" ? `${ORIGIN}/` : `${ORIGIN}${path}`;
+  // one canonical per page: no trailing slash, and a board's name in lower case
+  const trimmed = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  const own = trimmed.split("/").length === 2 ? trimmed.toLowerCase() : trimmed;
+  const self = path === "/" ? `${ORIGIN}/` : `${ORIGIN}${own}`;
   const tags = [
     `<meta name="description" content="${escapeXml(DESCRIPTION)}" />`,
     ...(status === 200 ? [`<link rel="canonical" href="${escapeXml(self)}" />`] : []),
@@ -156,7 +159,10 @@ const homeHtml: string = await aboutMarkdown().then((md) => marked.parse(md, { g
 const escapeHtml = escapeXml;
 
 /** Put server-rendered text inside the shell's empty #root. */
-export const fillRoot = (html: string, inner: string): string => html.replace('<div id="root"></div>', () => `<div id="root">${inner}</div>`);
+// A 404 shell marks #root with data-status="404": the client reads it before it
+// replaces #root, so a logged-out visitor sees "No such board" and not a login page.
+export const fillRoot = (html: string, inner: string, status: 200 | 404 = 200): string =>
+  html.replace('<div id="root"></div>', () => `<div id="root"${status === 404 ? ' data-status="404"' : ""}>${inner}</div>`);
 
 export const homeRoot = (): string => `<main>${homeHtml}</main>`;
 

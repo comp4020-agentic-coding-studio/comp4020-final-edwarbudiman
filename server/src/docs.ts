@@ -398,6 +398,38 @@ export async function currentDocsMarkdown(): Promise<Map<string, string>> {
   return out;
 }
 
+/** True when GET `path` under /docs would find something (a page, its .md twin, an asset, a redirect), so other methods can tell 405 from 404. */
+export async function docsPathExists(path: string): Promise<boolean> {
+  if (path === "/docs" || path === "/docs/" || path === "/docs/infima.css") return true;
+  const asset = path.match(/^\/docs\/assets\/((?:[\w-]+\/)?[\w-][\w.-]*)$/);
+  if (asset) {
+    try {
+      return (await stat(join(ASSETS(), asset[1]))).isFile() && extname(asset[1]).toLowerCase() in ASSET_TYPES;
+    } catch {
+      return false;
+    }
+  }
+  const versions = await loadVersions();
+  const pages = new Set<string>();
+  for (const v of versions) {
+    const prefix = base(versions, v);
+    const dir = versionDir(versions, v);
+    pages.add(prefix);
+    pages.add(`${prefix}versions/`);
+    const [general, ...sectioned] = await Promise.all([loadSection(dir, ""), ...SECTIONS.map((s) => loadSection(dir, s))]);
+    for (const p of general) pages.add(hrefIn(prefix, p));
+    SECTIONS.forEach((sec, i) => {
+      pages.add(`${prefix}${sec}/`);
+      for (const p of sectioned[i]) pages.add(hrefIn(prefix, p));
+    });
+  }
+  if (path.endsWith(".md")) {
+    const current = await currentDocsMarkdown();
+    return [...current.keys()].some((k) => docsMarkdownUrl(k) === path);
+  }
+  return pages.has(path.endsWith("/") ? path : `${path}/`);
+}
+
 export async function serveDocs(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (path === "/docs") return redirect(res, "/docs/");
   if (path === "/docs/infima.css") {

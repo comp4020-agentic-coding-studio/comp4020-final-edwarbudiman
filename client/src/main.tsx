@@ -18,8 +18,31 @@ const PAGES = new Set<string>([...SPA_PAGES, ...SERVER_PAGES]);
 /** Pages the server renders itself (README and the docs site), not the SPA. */
 const SERVER_PAGE = new RegExp(`^/(${SERVER_PAGES.join("|")})(/|$)`);
 
+// The server marks the shell of a missing board with data-status="404" on #root.
+// Read it before React replaces #root, and only for the path that was loaded.
+const rootEl = document.getElementById("root")!;
+const notFoundPath = rootEl.dataset.status === "404" ? location.pathname : null;
+
+function NoSuchBoard({ onLogin }: { onLogin: () => void }) {
+  return (
+    <main className="auth">
+      <div className="auth-card no-board">
+        <h1>No such board</h1>
+        <p>There's no board or page here, or you need to log in to see it.</p>
+        <button type="button" className="primary" onClick={onLogin}>
+          Log in to use Post-its
+        </button>
+        <p className="no-board-links">
+          <a href="/readme/">README</a> · <a href="/docs/">Docs</a>
+        </p>
+      </div>
+    </main>
+  );
+}
+
 function App() {
   const path = usePath();
+  const [wantsLogin, setWantsLogin] = useState(false);
   const serverPage = SERVER_PAGE.test(path);
 
   // if the SPA ever lands on a server page (a navigate(), popstate or a dev
@@ -55,6 +78,8 @@ function App() {
   if (me === undefined) return <div className="loading">Loading…</div>;
 
   if (!me) {
+    // a missing board, on the page the server said was missing: say so first
+    if (notFoundPath === path && !wantsLogin) return <NoSuchBoard onLogin={() => setWantsLogin(true)} />;
     // login required for everything but sign-up, log-in and /readme/
     const mode = path === "/signup" ? "signup" : "login";
     const next = path === "/" || path === "/login" || path === "/signup" ? "/" : path;
@@ -85,7 +110,7 @@ function App() {
   return <SessionContext.Provider value={{ me, setMe }}>{page}</SessionContext.Provider>;
 }
 
-createRoot(document.getElementById("root")!).render(
+createRoot(rootEl).render(
   <StrictMode>
     <App />
   </StrictMode>,

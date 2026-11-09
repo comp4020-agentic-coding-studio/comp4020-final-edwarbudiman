@@ -5,6 +5,7 @@ import { marked } from "marked";
 import { config } from "./config.ts";
 import { USERNAME_RE } from "./auth.ts";
 import { fillRoot, homeRoot, injectHead, notFound, notFoundMarkdown, notFoundRoot, prefersMarkdown } from "./discovery.ts";
+import { docsPathExists } from "./docs.ts";
 import { SPA_PAGES, underPrefix } from "./routes.ts";
 import type { DB } from "./db.ts";
 
@@ -135,15 +136,22 @@ export function shellExists(db: DB, path: string): boolean {
   }
   const [kind, slug] = decoded;
   if (kind === "u") return true; // an old link; the app redirects it to /<name>
-  if (kind === "c") return db.prepare("SELECT 1 FROM boards WHERE kind = 'channel' AND slug = ?").get(slug) !== undefined;
+  // private (key or list) channels look the same as missing ones to anyone who isn't in the app
+  if (kind === "c") return db.prepare("SELECT 1 FROM boards WHERE kind = 'channel' AND slug = ? AND visibility = 'public'").get(slug) !== undefined;
   return false;
 }
 
 /** True when GET `path` would be answered with something other than a 404, decided without reading files. */
-export function getPageExists(db: DB, path: string): boolean {
+export async function getPageExists(db: DB, path: string): Promise<boolean> {
   if (["/robots.txt", "/sitemap.xml", "/index.md", "/readme.md", "/mcp"].includes(path)) return true;
   if (underPrefix(path, ".well-known")) return false;
-  if (underPrefix(path, "readme") || underPrefix(path, "docs")) return true;
+  if (underPrefix(path, "docs")) return docsPathExists(path);
+  if (underPrefix(path, "readme")) {
+    if (["/readme", "/readme/", "/readme/index.html"].includes(path)) return true;
+    const file = safePath(config.rootDir, path.slice("/readme/".length));
+    if (!file || !IMAGE_EXTS.has(extname(file).toLowerCase())) return false;
+    return stat(file).then((st) => st.isFile(), () => false);
+  }
   return !extname(path) && shellExists(db, path);
 }
 
@@ -170,7 +178,7 @@ export async function serveClient(db: DB, req: IncomingMessage, res: ServerRespo
   const status = found ? 200 : 404;
   try {
     const raw = await readFile(index, "utf8");
-    const shell = fillRoot(injectHead(raw, { path, status }), found ? (path === "/" ? homeRoot() : "") : notFoundRoot(path));
+    const shell = fillRoot(injectHead(raw, { path, status }), found ? (path === "/" ? homeRoot() : "") : notFoundRoot(path), status);
     res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache", "content-security-policy": csp });
     res.end(req.method === "HEAD" ? undefined : shell);
   } catch {
