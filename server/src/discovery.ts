@@ -85,7 +85,7 @@ const readmeMarkdown = (): Promise<string> => readFile(join(config.rootDir, "REA
 const aboutMarkdown = (): Promise<string> => readFile(join(config.rootDir, "docs", "agents", "about.md"), "utf8");
 
 /** The Link header on the HTML pages: where the Markdown and the docs are. */
-export const LINK_HOME = `</index.md>; rel="alternate"; type="text/markdown", </docs/>; rel="describedby"`;
+export const LINK_HOME = `</index.md>; rel="alternate"; type="text/markdown", </docs/>; rel="describedby", </openapi.json>; rel="service-desc"; type="application/json"`;
 export const linkAlternate = (mdUrl: string): string => `<${mdUrl}>; rel="alternate"; type="text/markdown"`;
 
 // ---------------------------------------------------------------- the HTML shell's head
@@ -195,7 +195,7 @@ export function serveRobots(req: IncomingMessage, res: ServerResponse): void {
 }
 
 export async function serveSitemap(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const paths = ["/readme/", ...(await currentDocsMarkdown()).keys()];
+  const paths = ["/readme/", ...(await currentDocsMarkdown()).keys(), "/openapi.json", "/llms.txt"];
   const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths
     .map((p) => `  <url><loc>${escapeXml(ORIGIN + p)}</loc></url>`)
     .join("\n")}\n</urlset>\n`;

@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiTokenInfo, changePassword, login, logout, makeApiToken, publicUser, requireUser, revokeApiToken, seedDemo, signup, updateMe } from "./auth.ts";
-import { handleMcp } from "./agent.ts";
+import { TOKEN_ROUTES } from "./agent.ts";
 import { channelBoard, createArrow, createChannel, createNote, createSection, deleteArrow, deleteSection, updateSection, deleteNote, updateArrow, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
 import { addComment, deleteComment, editComment, readSide, setProof, setStatus } from "./side.ts";
 import { config } from "./config.ts";
@@ -12,6 +12,7 @@ import { attachRealtime, liveStats, userChanged } from "./realtime.ts";
 import { underPrefix } from "./routes.ts";
 import { getPageExists, serveClient, serveReadme } from "./static.ts";
 import { serveDocs } from "./docs.ts";
+import { serveLlmsTxt, serveOpenApi } from "./openapi.ts";
 import { negotiate, notFound, serveMarkdownTwin, serveRobots, serveSitemap } from "./discovery.ts";
 
 const db = openDb(config.dataDir);
@@ -195,7 +196,8 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
     throw new HttpError(pathMatched ? 405 : 404, pathMatched ? "method not allowed" : "no such endpoint");
   }
   // the agent endpoint: no Origin needed (agents aren't browsers), its own auth
-  if (path === "/mcp") return handleMcp(db, req, res);
+  const tokenRoute = TOKEN_ROUTES.find((r) => r.path === path);
+  if (tokenRoute) return tokenRoute.handler(db, req, res);
   // a path that wouldn't exist under GET is a 404 whatever the method; only a
   // path that does exist can be answered 405
   if (method !== "GET" && method !== "HEAD") {
@@ -205,6 +207,8 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
   // for agents (see routes.ts): each root file by name, never the SPA shell
   if (path === "/robots.txt") return serveRobots(req, res);
   if (path === "/sitemap.xml") return serveSitemap(req, res);
+  if (path === "/openapi.json") return serveOpenApi(req, res);
+  if (path === "/llms.txt") return serveLlmsTxt(req, res);
   if (path === "/index.md" || path === "/readme.md") return serveMarkdownTwin(req, res, path);
   if (underPrefix(path, ".well-known")) return notFound(req, res);
   if (underPrefix(path, "readme")) {
