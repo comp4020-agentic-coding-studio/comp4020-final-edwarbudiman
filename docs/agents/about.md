@@ -6,8 +6,9 @@ how you prioritise and group it. Other people can visit your board and leave
 you a note, and when they're there at the same time you see their cursor, so it
 feels less lonely.
 
-- Notes are plain text up to 280 characters, in a few colours, with labels and a status (todo, doing, done).
-- Your board is private to you until you share it; other people's boards and shared channels are reached by name.
+- Notes are plain text up to 280 characters, in a few colours. Group them by drawing named sections on the board.
+- Each person sets their own status on a note (none, on progress or done), and only they see it.
+- Anyone can visit your board at `/<username>` and leave you a note. A single note can be private.
 - Boards update live for everyone who is on them.
 
 ## Read more

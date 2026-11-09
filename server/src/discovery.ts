@@ -14,7 +14,6 @@ const ORIGIN = config.publicOrigin;
 const MD = "text/markdown; charset=utf-8";
 
 const escapeXml = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const escapeAttr = escapeXml;
 
 function send(req: IncomingMessage, res: ServerResponse, status: number, type: string, body: string, extra: Record<string, string> = {}): void {
   const bytes = Buffer.from(body, "utf8");
@@ -65,12 +64,12 @@ const HEAD_TAGS = (): string => {
   const title = "Post-its";
   const description = "A board for your notes. Put them wherever you like: where a note sits is how you prioritise and group it. Visit other boards and see who's there.";
   return [
-    `<meta name="description" content="${escapeAttr(description)}" />`,
-    `<link rel="canonical" href="${escapeAttr(ORIGIN)}/" />`,
-    `<meta property="og:title" content="${title}" />`,
-    `<meta property="og:description" content="${escapeAttr(description)}" />`,
+    `<meta name="description" content="${escapeXml(description)}" />`,
+    `<link rel="canonical" href="${escapeXml(ORIGIN)}/" />`,
+    `<meta property="og:title" content="${escapeXml(title)}" />`,
+    `<meta property="og:description" content="${escapeXml(description)}" />`,
     `<meta property="og:type" content="website" />`,
-    `<meta property="og:url" content="${escapeAttr(ORIGIN)}/" />`,
+    `<meta property="og:url" content="${escapeXml(ORIGIN)}/" />`,
   ].join("\n    ");
 };
 
@@ -101,37 +100,43 @@ export async function serveSitemap(req: IncomingMessage, res: ServerResponse): P
   send(req, res, 200, "application/xml; charset=utf-8", body, { "cache-control": "public, max-age=300" });
 }
 
-/** /index.md and /readme.md: the same bytes whatever the Accept header says. */
-export async function serveRootMarkdown(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
-  sendMarkdown(req, res, path === "/index.md" ? await aboutMarkdown() : await readmeMarkdown());
+/**
+ * The one place a page's Markdown is chosen. `htmlPath` is the page's HTML path
+ * (/, /readme/, /docs/features/notes/). Returns the body and the URL of its
+ * `.md` twin, or undefined when that page has no Markdown (older doc versions,
+ * unknown paths). Negotiation and the `.md` routes both go through here.
+ */
+async function markdownFor(htmlPath: string): Promise<{ body: string; twin: string } | undefined> {
+  if (htmlPath === "/") return { body: await aboutMarkdown(), twin: "/index.md" };
+  if (htmlPath === "/readme/") return { body: await readmeMarkdown(), twin: "/readme.md" };
+  if (!underPrefix(htmlPath, "docs") || !htmlPath.endsWith("/")) return undefined;
+  const body = (await currentDocsMarkdown()).get(htmlPath);
+  return body === undefined ? undefined : { body, twin: docsMarkdownUrl(htmlPath) };
 }
 
-/** /docs/<path>.md: the Markdown source of a current-version docs page. */
-export async function serveDocsMarkdown(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
-  const pages = await currentDocsMarkdown();
-  const html = path === "/docs/index.md" ? "/docs/" : `${path.slice(0, -".md".length)}/`;
-  // /docs/features/index.md is not a twin: only the HTML path's own twin exists
-  const body = pages.get(html);
-  if (body === undefined || docsMarkdownUrl(html) !== path) return notFound(req, res);
-  sendMarkdown(req, res, body);
+/** The HTML path a `.md` URL is the twin of: /docs/features/notes.md -> /docs/features/notes/. */
+const htmlPathOfTwin = (mdPath: string): string =>
+  mdPath === "/index.md" ? "/" : mdPath === "/readme.md" ? "/readme/" : mdPath === "/docs/index.md" ? "/docs/" : `${mdPath.slice(0, -".md".length)}/`;
+
+/** /index.md, /readme.md and /docs/<path>.md: the same bytes whatever the Accept header says. */
+export async function serveMarkdownTwin(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+  const page = await markdownFor(htmlPathOfTwin(path));
+  // only the HTML path's own twin exists: /docs/features/index.md is not one
+  if (!page || page.twin !== path) return notFound(req, res);
+  sendMarkdown(req, res, page.body);
 }
 
 /**
  * Called before the HTML handlers for /, /readme/ and /docs/**. Answers with
  * Markdown when the client prefers it; otherwise sets the headers the HTML
- * response should carry (Vary, Link) and returns false so the caller serves it.
+ * response should carry and returns false so the caller serves it. `Link` goes
+ * out only when the page's `.md` twin exists.
  */
 export async function negotiate(req: IncomingMessage, res: ServerResponse, path: string): Promise<boolean> {
-  const docs = underPrefix(path, "docs") && path.endsWith("/");
-  const twin = path === "/" ? "/index.md" : path === "/readme/" ? "/readme.md" : docs ? docsMarkdownUrl(path) : null;
-  if (!twin) return false;
-  if (prefersMarkdown(req.headers.accept)) {
-    if (path === "/") return sendMarkdown(req, res, await aboutMarkdown()), true;
-    if (path === "/readme/") return sendMarkdown(req, res, await readmeMarkdown()), true;
-    const body = (await currentDocsMarkdown()).get(path);
-    if (body !== undefined) return sendMarkdown(req, res, body), true;
-  }
+  if (path !== "/" && path !== "/readme/" && !(underPrefix(path, "docs") && path.endsWith("/"))) return false;
+  const page = await markdownFor(path);
+  if (page && prefersMarkdown(req.headers.accept)) return sendMarkdown(req, res, page.body), true;
   res.setHeader("vary", "Accept");
-  res.setHeader("link", path === "/" ? LINK_HOME : linkAlternate(twin));
+  if (page) res.setHeader("link", path === "/" ? LINK_HOME : linkAlternate(page.twin));
   return false;
 }

@@ -146,6 +146,31 @@ it("a browser still gets HTML on /, /readme/ and /docs/, with Vary and the Link 
   expect((await get("/docs/features/notes/", BROWSER)).headers.get("link")).toBe('</docs/features/notes.md>; rel="alternate"; type="text/markdown"');
 });
 
+it("the about page describes the app today: sections, per-person status, visitable boards", () => {
+  const about = readFileSync(new URL("../docs/agents/about.md", import.meta.url), "utf8");
+  expect(about.toLowerCase()).not.toContain("label");
+  expect(about).not.toContain("todo");
+  expect(about).not.toContain("private to you until");
+  expect(about).toContain("sections");
+  expect(about).toContain("/<username>");
+});
+
+it("Link alternate is set only when the .md twin exists, and every sitemap page's target returns 200", async () => {
+  for (const path of ["/docs/v0.1/", "/docs/nope/", "/docs/features/nope/"]) {
+    const res = await get(path, BROWSER);
+    expect(res.headers.get("link"), path).toBeNull();
+  }
+  const sitemap = await (await get("/sitemap.xml")).text();
+  const paths = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].replace(origin, ""));
+  expect(paths.length).toBeGreaterThan(2);
+  for (const path of paths) {
+    const link = (await get(path, BROWSER)).headers.get("link") ?? "";
+    const target = link.match(/<([^>]+)>; rel="alternate"/)?.[1];
+    expect(target, path).toBeTruthy();
+    expect((await get(target as string)).status, `${path} -> ${target}`).toBe(200);
+  }
+});
+
 it("HEAD answers like GET without a body", async () => {
   for (const path of ["/robots.txt", "/sitemap.xml", "/index.md"]) {
     const res = await fetch(new URL(path, baseUrl), { method: "HEAD" });
