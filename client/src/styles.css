@@ -1910,3 +1910,436 @@ button.board-title svg {
 .arrow-handle { fill: #fff; stroke: var(--accent); stroke-width: 2; pointer-events: all; cursor: grab; }
 .arrow-handle:hover { fill: var(--accent); }
 .arrow-snap { fill: none; stroke: var(--accent); stroke-width: 2; }
+
+/* ---------------------------------------------------------------- note back side: corner button and sidebar */
+
+/* three zones: a header strip (the corner button sits flush in its right end), the text, a footer with status and labels */
+.note {
+  padding: 0;
+  overflow: visible;
+}
+.note-head {
+  flex: none;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 76px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgb(0 0 0 / 0.5);
+  border-bottom: 1px solid rgb(0 0 0 / 0.07);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.note-head .author {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.note-head .author.you {
+  font-weight: 700;
+  color: rgb(0 0 0 / 0.68);
+}
+.note .note-text,
+.note .note-edit {
+  padding: 8px 12px 0;
+}
+.note .note-foot {
+  flex: none;
+  margin: 0;
+  padding: 6px 12px 7px;
+  border-top: 1px solid rgb(0 0 0 / 0.07);
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 28px;
+}
+.note .note-foot .status {
+  font-weight: 600;
+  color: rgb(0 0 0 / 0.62);
+}
+.note .note-foot .chips {
+  flex: 0 1 auto;
+}
+
+.side-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  height: 32px;
+  min-width: 40px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 9px 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+  background: rgb(0 0 0 / 0.07);
+  border: 0;
+  border-left: 1px solid rgb(0 0 0 / 0.07);
+  border-bottom: 1px solid rgb(0 0 0 / 0.07);
+  border-radius: 0 var(--note-radius) 0 0;
+  transition:
+    background 150ms,
+    color 150ms,
+    transform 150ms;
+}
+.side-btn:hover {
+  background: rgb(0 0 0 / 0.16);
+}
+.side-btn:active {
+  transform: scale(0.94);
+  transform-origin: top right;
+}
+.side-btn .sb-icon {
+  display: inline-block;
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 200ms;
+}
+.side-btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.side-btn.on .sb-icon {
+  transform: scale(1.15);
+}
+.side-btn.proved {
+  background: #1f8a4c;
+  border-color: #1f8a4c;
+  color: #fff;
+}
+.side-btn.proved .sb-icon {
+  font-weight: 800;
+  animation: ns-pop 260ms ease-out;
+}
+@keyframes ns-pop {
+  0% {
+    transform: scale(0.4);
+  }
+  70% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@media (hover: none) {
+  .note-head {
+    height: 44px;
+    padding-right: 84px;
+  }
+  .side-btn {
+    height: 44px;
+    min-width: 48px;
+    font-size: 13px;
+  }
+  .side-btn .sb-icon {
+    font-size: 20px;
+  }
+}
+.nudge-dot {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.note-side {
+  position: absolute;
+  z-index: 30;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: 320px;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 12px 14px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: ns-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.note-side.leaving {
+  animation: ns-out 200ms ease-in forwards;
+  pointer-events: none;
+}
+@keyframes ns-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes ns-out {
+  to {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes ns-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.note-side > * {
+  flex: none;
+}
+.note-side > .ns-comments {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.note-side h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.ns-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ns-quote {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--hover);
+  border-radius: 6px;
+  max-height: 3.6em;
+  overflow: hidden;
+  color: var(--muted);
+  animation: ns-fade 200ms;
+}
+.ns-proof {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ns-proof.ro {
+  color: var(--muted);
+}
+.ns-mine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.ns-st {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 99px;
+  padding: 2px 8px;
+  min-height: 0;
+  font-size: 12px;
+}
+.ns-st.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.ns-circles {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.ns-dot {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0;
+  color: var(--ink);
+}
+.ns-dot.s-done {
+  border-color: #1f8a4c;
+}
+.ns-dot.s-progress {
+  border-color: #d9a21b;
+}
+.ns-dot.on {
+  background: var(--hover);
+}
+.ns-more {
+  flex: none;
+  min-width: 44px;
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 0;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--hover);
+}
+.ns-group {
+  margin-top: 6px;
+}
+.ns-glabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.ns-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.ns-names li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ns-names .ns-nm {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-scroll {
+  max-height: 170px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+.ns-names em,
+.ns-cmeta em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11px;
+}
+.ns-tip,
+.ns-muted {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ns-comments ul {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+  /* comments scrolling up fade out softly under the heading */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+}
+.ns-comments ul > li {
+  flex: none;
+}
+.ns-comments ul > li.ns-spacer {
+  flex: 1 1 0;
+}
+.ns-comments ul > li:not(.ns-spacer) {
+  animation: ns-fade 200ms;
+}
+.ns-comments p {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.ns-cact {
+  display: flex;
+  gap: 8px;
+}
+.ns-link {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  min-height: 0;
+  font-size: 11px;
+}
+.ns-form {
+  display: flex;
+  gap: 6px;
+}
+.ns-form input,
+.ns-comments li input {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .note-side {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: 72vh;
+    border-radius: 14px 14px 0 0;
+    animation-name: ns-up;
+  }
+  .note-side.leaving {
+    animation-name: ns-down;
+  }
+  .ns-scroll {
+    max-height: 110px;
+  }
+}
+@keyframes ns-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes ns-down {
+  to {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .note-side,
+  .note-side.leaving,
+  .ns-quote,
+  .ns-comments ul > li,
+  .side-btn.proved .sb-icon {
+    animation-duration: 1ms;
+  }
+  .side-btn,
+  .side-btn .sb-icon {
+    transition: none;
+  }
+}
