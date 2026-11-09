@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { api, ApiError, COLORS, STATUSES } from "../api.ts";
-import type { BoardInfo, Color, Note } from "../api.ts";
+import { api, ApiError, COLORS, nextSideStatus, prevSideStatus, SIDE_STATUS_NAMES } from "../api.ts";
+import type { BoardInfo, Color, Note, SideStatus, SideSummary } from "../api.ts";
 import { LiveSocket } from "../socket.ts";
 import type { ServerMsg, Status } from "../socket.ts";
 import { Link, useSession } from "../router.tsx";
 import { Header } from "./Header.tsx";
 import { Chat } from "./Chat.tsx";
+import { NoteSide } from "./NoteSide.tsx";
 import { SpaceLayer } from "../space/SpaceLayer.tsx";
 import type { Phase, RoomLink } from "../space/SpaceLayer.tsx";
 import { can3D, initialMode, rememberMode } from "../space/viewMode.ts";
@@ -115,8 +116,12 @@ const COLOR_NAMES: Record<Color, string> = {
   purple: "Purple",
 };
 
-const STATUS_NAMES: Record<Note["status"], string> = { todo: "to do", doing: "doing", done: "done" };
-const STATUS_GLYPHS: Record<Note["status"], string> = { todo: "○", doing: "◐", done: "✓" };
+/** Just the per-viewer back-side fields of a note (what a note:side message or a status write carries). */
+function pickSummary(n: SideSummary): SideSummary {
+  return { myStatus: n.myStatus, proof: n.proof, commentCount: n.commentCount, doneCount: n.doneCount, progressCount: n.progressCount, needsProof: n.needsProof };
+}
+
+const SIDE_MS = 200; // how long the sidebar takes to leave, so it can animate out before unmounting
 
 // each person in a room gets a colour of their own, from their connection id
 const PEER_COLORS = ["#e5484d", "#f76b15", "#30a46c", "#0090ff", "#8e4ec6", "#d6409f", "#12a594", "#ab6400"];
@@ -199,6 +204,25 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const [view, setViewState] = useState<View>({ ox: 0, oy: 0, s: 1 });
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [editing, setEditing] = useState<number | null>(null);
+  const [sideId, setSideId] = useState<number | null>(null); // the note whose sidebar is open
+  const [shownId, setShownId] = useState<number | null>(null); // kept mounted while the sidebar animates out
+  const [leaving, setLeaving] = useState(false);
+  const [sideTick, setSideTick] = useState(0); // bumped when the open note's back side changes
+  useEffect(() => {
+    if (sideId !== null) {
+      setShownId(sideId);
+      setLeaving(false);
+      return;
+    }
+    setLeaving(true);
+    const t = window.setTimeout(() => {
+      setShownId(null);
+      setLeaving(false);
+    }, SIDE_MS);
+    return () => window.clearTimeout(t);
+  }, [sideId]);
+  const sideIdRef = useRef<number | null>(null);
+  sideIdRef.current = sideId;
   const [newColor, setNewColor] = useState<Color>("yellow");
   const [tool, setTool] = useState<Tool>("select");
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -557,6 +581,14 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         setNotes((prev) => ({ ...prev, [note.id]: mine && prev[note.id] ? { ...note, x: prev[note.id].x, y: prev[note.id].y } : note }));
         return;
       }
+      case "note:side": {
+        // someone changed a note's back side: take my own summary, and reload the sidebar if it's open on this note
+        const id = m.id as number;
+        const sum = m.summary as SideSummary;
+        setNotes((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...pickSummary(sum) } } : prev));
+        if (sideIdRef.current === id) setSideTick((t) => t + 1);
+        return;
+      }
       case "arrow:upsert": {
         const arrow = m.arrow as Arrow;
         setArrows((prev) => (prev.some((a) => a.id === arrow.id) ? prev.map((a) => (a.id === arrow.id ? arrow : a)) : [...prev, arrow]));
@@ -599,6 +631,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           return e === id ? null : e;
         });
         unselect(id);
+        if (sideIdRef.current === id) setSideId(null);
         return;
       }
       case "note:move": {
@@ -735,7 +768,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   // ---------------------------------------------------------------- note writes
 
   const patchNote = useCallback(
-    async (id: number, change: Partial<Pick<Note, "text" | "color" | "visibility" | "labels" | "status" | "x" | "y">> & { front?: boolean }) => {
+    async (id: number, change: Partial<Pick<Note, "text" | "color" | "visibility" | "labels" | "x" | "y">> & { front?: boolean }) => {
       const before = notesRef.current[id];
       if (!before) return;
       const { front: _front, ...local } = change;
@@ -772,12 +805,17 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       z: 999_999,
       visibility: "public",
       labels: [],
-      status: "todo",
       version: 0,
       createdAt: now,
       updatedAt: now,
       canEdit: true,
       canMove: false, // not until the server knows it
+      myStatus: null,
+      proof: false,
+      commentCount: 0,
+      doneCount: 0,
+      progressCount: 0,
+      needsProof: false,
     };
     setNotes((prev) => ({ ...prev, [tempId]: temp }));
     select([tempId]);
@@ -951,17 +989,56 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     }
   }
 
-  /** Step each selected note you may edit one status forward or back; the ends stop rather than wrap. */
+  /** Set your own status on a note. Anyone who can see a note can; it's never shared. */
+  const setMyStatus = useCallback(
+    async (id: number, status: SideStatus | null) => {
+      const before = notesRef.current[id];
+      if (!before || id < 0) return;
+      const bump = (n: Note, to: SideStatus | null): Note => {
+        const drop = (k: SideStatus | null) => (k === "done" ? { doneCount: -1 } : k === "progress" ? { progressCount: -1 } : {});
+        const add = (k: SideStatus | null) => (k === "done" ? { doneCount: 1 } : k === "progress" ? { progressCount: 1 } : {});
+        const d = drop(n.myStatus), a = add(to);
+        return { ...n, myStatus: to, doneCount: n.doneCount + (d.doneCount ?? 0) + (a.doneCount ?? 0), progressCount: n.progressCount + (d.progressCount ?? 0) + (a.progressCount ?? 0) };
+      };
+      setNotes((prev) => (prev[id] ? { ...prev, [id]: bump(prev[id], status) } : prev));
+      try {
+        const r = await api<{ note: Note }>("PUT", `/api/notes/${id}/status`, { status });
+        setNotes((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...pickSummary(r.note) } } : prev));
+      } catch (err) {
+        setNotes((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...pickSummary(before) } } : prev));
+        flash(err instanceof ApiError ? err.message : "couldn't save that");
+      }
+    },
+    [flash],
+  );
+
+  const setProof = useCallback(
+    async (id: number, proof: boolean) => {
+      const before = notesRef.current[id];
+      if (!before || id < 0) return;
+      setNotes((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], proof, needsProof: false } } : prev));
+      try {
+        const r = await api<{ note: Note }>("PUT", `/api/notes/${id}/proof`, { proof });
+        setNotes((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...pickSummary(r.note) } } : prev));
+      } catch (err) {
+        setNotes((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...pickSummary(before) } } : prev));
+        flash(err instanceof ApiError ? err.message : "couldn't save that");
+      }
+    },
+    [flash],
+  );
+
+  /** Step your own status on each selected note: none → on progress → done. The ends stop rather than wrap. */
   function shiftStatus(dir: 1 | -1) {
     let stuck = false;
     for (const id of selectedRef.current) {
       const n = notesRef.current[id];
-      if (!n?.canEdit || id < 0) continue;
-      const next = STATUSES[STATUSES.indexOf(n.status) + dir];
-      if (next) void patchNote(id, { status: next });
+      if (!n || id < 0) continue;
+      const next = dir === 1 ? (n.myStatus === "done" ? undefined : nextSideStatus(n.myStatus)) : n.myStatus === null ? undefined : n.myStatus === "progress" ? null : "progress";
+      if (next !== undefined) void setMyStatus(id, next);
       else stuck = true;
     }
-    if (stuck) flash(dir === 1 ? "Already done. Shift S goes back." : "Already to do.");
+    if (stuck) flash(dir === 1 ? "Already done. Shift S goes back." : "Already none.");
   }
 
   // ---------------------------------------------------------------- clipboard
@@ -1155,6 +1232,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         deleteSelection();
         return;
       case "Escape":
+        setSideId(null);
         selectArrow(null);
         if (toolRef.current === "arrow") setTool("select");
         stopFollowing();
@@ -1362,6 +1440,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     if (e.pointerType === "mouse" && e.button !== 0 && e.button !== 1) return;
     if (e.button === 1) e.preventDefault(); // no autoscroll
     stopFollowing();
+    if (!fromNote) setSideId(null); // a click on empty canvas closes the sidebar
     viewportRef.current?.setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (startPinchIfTwo()) return;
@@ -1823,6 +1902,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   };
   const grabbing = tool === "hand" || spaceHeld;
   const canArrow = !!board?.isOwner && board.kind === "user";
+  const sideNote = shownId !== null ? sorted.find((n) => n.id === shownId) : undefined;
   const flat = phase === "board"; // the board's own tools only show on the flat board
 
   return (
@@ -1942,6 +2022,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
                 showAuthor={n.author !== me.username}
                 filteredOut={!shown(n)}
                 isBoardOwnersView={!!board?.isOwner}
+                mine={n.author === me.username}
+                sideOpen={sideId === n.id}
+                onOpenSide={() => setSideId((cur) => (cur === n.id ? null : n.id))}
                 nub={canArrow && tool === "select"}
                 onNub={(e) => { if (e.pointerType !== "touch") startArrow(e, n.id); }}
                 onPointerDown={(e) => onNoteDown(e, n)}
@@ -2017,6 +2100,20 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
               flash("Couldn't start 3D in this browser, so you're on the board.");
             }}
             onFocusBoard={() => phaseRef.current === "3d" && setPhase("toBoard")}
+          />
+        )}
+
+        {sideNote && (
+          <NoteSide
+            key="side"
+            note={sideNote}
+            me={me.username}
+            tick={sideTick}
+            leaving={leaving}
+            onSetStatus={(st) => void setMyStatus(sideNote.id, st)}
+            onSetProof={(p) => void setProof(sideNote.id, p)}
+            onClose={() => setSideId(null)}
+            onFlash={flash}
           />
         )}
 
@@ -2183,11 +2280,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
               Edit
             </button>
           )}
-          {selNotes.some((n) => n.canEdit) && (
-            <button className="quiet" onClick={(e) => shiftStatus(e.shiftKey ? -1 : 1)} title="Move status forward (S); Shift-click or Shift S goes back">
-              Status
-            </button>
-          )}
+          <button className="quiet" onClick={(e) => shiftStatus(e.shiftKey ? -1 : 1)} title="Your status: none, on progress, done (S); Shift-click or Shift S goes back">
+            Status
+          </button>
           <button className="quiet" onClick={duplicateSelection} title="Duplicate (⌘D / Ctrl+D)">
             Duplicate
           </button>
@@ -2256,7 +2351,7 @@ const SHORTCUTS: [string, string][] = [
   ["Copy, cut, paste", `${mod} C, ${mod} X, ${mod} V`],
   ["Duplicate", `${mod} D`],
   ["Draw a section (a named zone)", "G, then drag"],
-  ["Status forward / back", "S, Shift S"],
+  ["Your status: none, on progress, done / back", "S, Shift S"],
   ["Follow someone", "Click their avatar, top right (Esc stops)"],
   ["Delete", "Delete or Backspace"],
   ["Move the selection", "Arrow keys (Shift for bigger steps)"],
@@ -2359,6 +2454,9 @@ function NoteCard(props: {
   filteredOut: boolean;
   lock: LockInfo | undefined;
   isBoardOwnersView: boolean;
+  mine: boolean;
+  sideOpen: boolean;
+  onOpenSide: () => void;
   nub: boolean;
   onNub: (e: ReactPointerEvent) => void;
   onPointerDown: (e: ReactPointerEvent) => void;
@@ -2385,11 +2483,11 @@ function NoteCard(props: {
 
   const heldByOther = lock && !lock.mine;
   const isPrivate = note.visibility === "private";
-  const label = `Note${props.showAuthor ? ` by ${note.author}` : ""}${isPrivate ? ", private" : ""}, ${STATUS_NAMES[note.status]}: ${note.text || "empty"}`;
+  const label = `Note${props.showAuthor ? ` by ${note.author}` : ""}${isPrivate ? ", private" : ""}${note.myStatus ? `, ${SIDE_STATUS_NAMES[note.myStatus]}` : ""}${note.proof ? ", proof confirmed" : ""}${note.commentCount ? `, ${note.commentCount} comment${note.commentCount === 1 ? "" : "s"}` : ""}: ${note.text || "empty"}`;
   return (
     <div
       data-note={note.id}
-      className={`note c-${note.color} s-${note.status}${selected ? " selected" : ""}${editing ? " editing" : ""}${dragging ? " dragging" : ""}${heldByOther ? " held" : ""}${note.canMove ? " movable" : ""}${props.filteredOut ? " filtered-out" : ""}`}
+      className={`note c-${note.color}${note.myStatus ? ` s-${note.myStatus}` : ""}${selected ? " selected" : ""}${editing ? " editing" : ""}${dragging ? " dragging" : ""}${heldByOther ? " held" : ""}${note.canMove ? " movable" : ""}${props.filteredOut ? " filtered-out" : ""}`}
       style={{ left: note.x, top: note.y, width: NOTE_W, height: NOTE_H, zIndex: dragging ? 1_000_000 : note.z }}
       tabIndex={props.filteredOut ? -1 : 0}
       aria-hidden={props.filteredOut || undefined}
@@ -2410,6 +2508,16 @@ function NoteCard(props: {
         props.onDoubleClick();
       }}
     >
+      <header className="note-head">
+        <span className={`author${props.mine ? " you" : ""}`} title={`Created by ${props.mine ? "you" : note.author}`}>
+          {props.mine ? "You" : `by ${note.author}`}
+        </span>
+        {isPrivate && (
+          <span className="badge" title={props.isBoardOwnersView ? "Only you and its author can see this" : "Only you and the board's owner can see this"}>
+            private
+          </span>
+        )}
+      </header>
       {editing ? (
         <form
           className="note-edit"
@@ -2442,19 +2550,31 @@ function NoteCard(props: {
         <p className="note-text">{note.text || <span className="placeholder">{note.canEdit ? "Double-click to write" : "Empty"}</span>}</p>
       )}
       <footer className="note-foot">
-        <span className="status" aria-hidden="true">
-          <span className="glyph">{STATUS_GLYPHS[note.status]}</span>
-          {STATUS_NAMES[note.status]}
-        </span>
-        <span className="meta">
-          {props.showAuthor && <span className="author">{note.author}</span>}
-          {isPrivate && (
-            <span className="badge" title={props.isBoardOwnersView ? "Only you and its author can see this" : "Only you and the board's owner can see this"}>
-              private
-            </span>
-          )}
-        </span>
+        {note.myStatus && (
+          <span className="status" aria-hidden="true">
+            {SIDE_STATUS_NAMES[note.myStatus]}
+          </span>
+        )}
       </footer>
+      {!editing && note.id > 0 && (
+        <button
+          type="button"
+          className={`side-btn${props.sideOpen ? " on" : ""}${note.proof ? " proved" : ""}`}
+          aria-label={props.sideOpen ? "Close note details" : "Open note details"}
+          aria-expanded={props.sideOpen}
+          title="Details: proof, who's on it and comments"
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onOpenSide();
+          }}
+        >
+          <span className="sb-icon">{note.proof ? "✓" : "◧"}</span>
+          {note.commentCount > 0 && <span className="sb-com">💬 {note.commentCount}</span>}
+        </button>
+      )}
+      {note.needsProof && <span className="nudge-dot" title="Someone says done. Check it, then tick proof." />}
       {props.nub && !editing && <span className={`nub ${side}`} title="Drag onto another note to draw an arrow" onPointerDown={props.onNub} />}
       {heldByOther && <div className="held-by">{lock!.holder} is moving this</div>}
     </div>
