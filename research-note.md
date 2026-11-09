@@ -1,85 +1,74 @@
-# The harness, not the model: good agentic practice needs sensors on itself
+# A retrospective is not enough: harness changes need tests
 
 ## Position
 
-In agentic software development, the harness around the model now decides
-more than the model does. Most of the value of a harness is in its sensors,
-not in its guides. The field now moves to put sensors on the harness itself.
-The tool for this is a retrospective after each session. But the current
-evidence shows that a retrospective helps only when you test its changes. Thus
-the next problem for practitioners is to evaluate their retrospectives.
+The harness around a coding agent now decides more than the model does. The
+field answers this with retrospectives: after each session, the agent proposes
+changes to its own harness. I argue that a retrospective is necessary but not
+sufficient. Good practice keeps a harness change only when a later session
+shows that it helps.
 
-## The harness is more important than the model
+## The harness decides
 
-Böckeler (2026) gives the words for this argument. A harness is all the parts
-around the model. *Guides* steer the model before it acts. Examples are system
-prompts, `CLAUDE.md` and skills. *Sensors* let the model see the result of its
-work. Examples are tests, linters and review agents. Her main claim is that
-teams put too much work into guides and too little into sensors. Osmani makes
-a related point: the best coding agents use the same harness patterns, but
-they use different models. Thus the competition is now in the harness, not in
-the model.
+Böckeler (2026) divides a harness into two parts. *Guides* steer the agent
+before it acts, for example `CLAUDE.md` and skills. *Sensors* show the agent
+the result of its work, for example tests and review agents. Her main claim is
+that teams put too much work into guides and too little into sensors.
 
-DeepSeek Harness, released in August 2026, is a good test of this claim. Its
-design rule is "everything is a plugin". You can replace the model, the tools,
-the loop and the interface (DeepSeek, 2026). By Böckeler's account, this
-openness is an advantage. Winder.ai (2026) agrees. But the same comparison
-says that no part of it is stable yet. The repository also warns of
-"compatibility-breaking changes". freeCodeCamp (2026) states the problem
-clearly. The harness, not the model, decides if an agent recovers from a
-failed tool call or repeats it. You can use an open design only when its parts
-are stable. A closed harness such as Claude Code limits what you can change.
-That cost is real. But for a practitioner, stability must come first and
-openness second.
+DeepSeek Harness is a good test of this claim. Its design rule is "everything
+is a plugin" (DeepSeek, 2026). Winder.ai (2026) calls this openness an
+advantage, but also says that no part of it is stable yet. freeCodeCamp
+(2026) explains why stability matters: the harness, not the model, decides if
+an agent recovers from a failed tool call or repeats it. Thus an open harness
+is useful only when its parts are stable.
 
-## Packaged practice is a guide
+## Guides pile up
 
-Practitioners now steer agents with packaged workflows. Pocock (2026) supplies
-a `grill-me` skill. It asks hard questions about a plan before the agent
-writes code. Tan (2026) supplies pstack. It has playbooks, principle skills
-and a model budget for each role. These are good guides, but all guides have
-one limit. A guide cannot tell you when it stops working.
+Practitioners now share guides as skills, for example Pocock's `grill-me`
+(2026) and Tan's pstack (2026). One command installs a skill, so a local
+harness fills with guides that nobody tests. A guide cannot tell you when it
+stops working. Böckeler names the gap: no tool measures the coverage of a
+harness.
 
-Practitioner channels make this limit worse. New skills come each week from
-posts on X and from skill registries. One command installs a skill. Thus the
-local harness fills with guides that nobody shows to be useful. In my project,
-most of these tests never got to a pull request. More reading did not sort
-them. A workflow with sensors did: a spike that we discard, a judgement by the
-owner, a review, and then a merge. Parallel agent sessions, for example in
-Herdr, make sensors more necessary. One person cannot read every pane.
+My own project shows the same problem. I installed many skills after I read
+about them on X. They stayed on my computer, and almost none of them got to a
+pull request. More reading did not sort them. A process with sensors did: a
+spike, my judgement, a review, and then a merge. Parallel agent sessions make
+this more necessary, because one person cannot watch every session.
 
 ## A retrospective is a sensor on the harness
 
-The `/retro` skill from Pocock (AI Hero, 2026) is a direct attempt to close
-this gap. It does not examine the code. It examines the environment. It asks
-these questions: Could the agent find the correct files? Could an automatic
-check find its mistake? Which lines in `CLAUDE.md` changed nothing? Thus it is
-a sensor whose object is the harness. Böckeler says that this is an open
-problem: no tool measures the coverage of a harness.
+Pocock's `/retro` skill (AI Hero, 2026) is a direct attempt to close this
+gap. It does not examine the code. It examines the environment. Could the
+agent find the correct files? Could a check find its mistake? Which lines in
+`CLAUDE.md` changed nothing?
 
-Treude and Baltes (2026) give the first empirical data on `/retro`. They ran
-it after 30 SWE-bench Verified sessions. It made 125 proposals. Most of them
-came from real events in the session. Executable checks were the most common
-type. This result supports the practice, because a retrospective finds real
-faults. But the evaluation does not give strong support. The authors could
-evaluate seven changes. Two changes stopped the repeated action. One change
-decreased it. Four changes had no effect. One change added work on a
-different issue. Only 9 of 38 proposed checks could fail as written. The
-changes that worked were facts about the repository, for example the name of
-the test runner. The changes that failed were lists from one session. The
-authors conclude that self-evolution "needs ways to establish whether a
-change helps".
+Treude and Baltes (2026) give the first empirical data on `/retro`. After 30
+SWE-bench Verified sessions, it made 125 proposals, and most came from real
+events in the session. Thus a retrospective finds real faults. But the
+results of the changes were weak. Of seven changes that the authors could
+evaluate, two stopped the repeated action, one decreased it and four had no
+effect. One change added work on a different issue. Only 9 of 38 proposed
+checks could fail as written.
 
-## What good practice is
+## The counter-case
 
-These sources together show a discipline, not a tool. Use a stable harness
-until an open harness becomes stable. Think of skills and `CLAUDE.md` as
-guides that become old. Do a retrospective after each session, because it
-finds real faults. Then do a step that most practitioners do not do yet. Keep
-only the changes that apply to the full repository and that a check can
-test. Test them again on later work. Böckeler, Treude and Baltes do not
-answer one question: how can we measure a harness? Without that measurement,
-we cannot know when to remove a guide.
+A practitioner can say that a weak change costs little, so it is better to
+keep every proposal. The data does not support this. Bundled instructions
+sometimes made sessions longer, and a change from one issue added work on
+another. Each guide that you keep costs tokens and attention in every later
+session. The authors conclude that self-evolution "needs ways to establish
+whether a change helps".
+
+## Good practice
+
+The changes that worked were facts about the repository, for example the name
+of the test runner. The changes that failed were lists from one session. This
+gives a clear rule. Run a retrospective after each session. Keep a change
+only when it applies to the full repository and a check can test it. Then
+test it again on a later session, and remove it when it does not help. The
+open question is how to measure a harness well enough to make that decision
+automatically.
 
 ## References
 

@@ -2,11 +2,11 @@
 
 ## The topic
 
-My messages and to-do lists were scattered and cluttered. I wanted a post-it
-board, like FigJam. You put a note where you like, and its position shows its
-priority and its group. Other people can come to your board and leave a note.
-When they are there at the same time, you see their cursor, so the board
-feels less lonely.
+I wanted a place for the messages and to-do lists that end up scattered and
+cluttered: a post-it board, like FigJam, where you put notes wherever you like
+and their position is how you prioritise and group them. What makes it
+multi-user is that other people can come to your board and leave you a note,
+and being there with them at the same time makes it feel less lonely.
 
 ## The stack, and why
 
