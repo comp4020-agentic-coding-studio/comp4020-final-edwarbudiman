@@ -16,6 +16,7 @@ import { openCreateChannel, refreshSidebar } from "../shell.ts";
 
 export const NOTE_W = 200;
 export const NOTE_H = 160;
+const AGENT_MARK_MS = 3500; // how long a note shows it was just changed by someone's agent
 const NOTE_MAX = 280;
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 3;
@@ -201,6 +202,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const [status, setStatus] = useState<Status>("connecting");
   const [presence, setPresence] = useState<{ users: string[]; anon: number }>({ users: [], anon: 0 });
   const [cursors, setCursors] = useState<Record<string, Cursor>>({});
+  // notes a person's agent just changed: who (null = anonymous) and a counter that restarts the glow on a repeat touch
+  const [agentTouch, setAgentTouch] = useState<Record<number, { by: string | null; n: number }>>({});
+  const agentTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
   const [locks, setLocks] = useState<Record<number, LockInfo>>({});
   const [view, setViewState] = useState<View>({ ox: 0, oy: 0, s: 1 });
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -620,6 +624,24 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         const note = m.note as Note;
         const mine = dragIds().includes(note.id);
         setNotes((prev) => ({ ...prev, [note.id]: mine && prev[note.id] ? { ...note, x: prev[note.id].x, y: prev[note.id].y } : note }));
+        return;
+      }
+      case "agent:touch": {
+        const id = m.noteId as number;
+        const by = (m.by as string | null) ?? null;
+        setAgentTouch((prev) => ({ ...prev, [id]: { by, n: (prev[id]?.n ?? 0) + 1 } }));
+        clearTimeout(agentTimers.current.get(id));
+        agentTimers.current.set(
+          id,
+          setTimeout(() => {
+            agentTimers.current.delete(id);
+            setAgentTouch((prev) => {
+              const next = { ...prev };
+              delete next[id];
+              return next;
+            });
+          }, AGENT_MARK_MS),
+        );
         return;
       }
       case "note:side": {
@@ -2102,6 +2124,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
                 filteredOut={!shown(n)}
                 isBoardOwnersView={!!board?.isOwner}
                 mine={n.author === me.username}
+                agent={agentTouch[n.id]}
                 sideOpen={sideId === n.id}
                 onOpenSide={() => setSideId((cur) => (cur === n.id ? null : n.id))}
                 nub={canArrow && tool === "select"}
@@ -2537,6 +2560,7 @@ function NoteCard(props: {
   lock: LockInfo | undefined;
   isBoardOwnersView: boolean;
   mine: boolean;
+  agent?: { by: string | null; n: number };
   sideOpen: boolean;
   onOpenSide: () => void;
   nub: boolean;
@@ -2569,7 +2593,7 @@ function NoteCard(props: {
   return (
     <div
       data-note={note.id}
-      className={`note c-${note.color}${note.myStatus ? ` s-${note.myStatus}` : ""}${selected ? " selected" : ""}${editing ? " editing" : ""}${dragging ? " dragging" : ""}${heldByOther ? " held" : ""}${note.canMove ? " movable" : ""}${props.filteredOut ? " filtered-out" : ""}`}
+      className={`note c-${note.color}${note.myStatus ? ` s-${note.myStatus}` : ""}${selected ? " selected" : ""}${editing ? " editing" : ""}${dragging ? " dragging" : ""}${heldByOther ? " held" : ""}${note.canMove ? " movable" : ""}${props.filteredOut ? " filtered-out" : ""}${props.agent ? ` agent-glow-${props.agent.n % 2}` : ""}`}
       style={{ left: note.x, top: note.y, width: NOTE_W, height: NOTE_H, zIndex: dragging ? 1_000_000 : note.z }}
       tabIndex={props.filteredOut ? -1 : 0}
       aria-hidden={props.filteredOut || undefined}
@@ -2590,6 +2614,11 @@ function NoteCard(props: {
         props.onDoubleClick();
       }}
     >
+      {props.agent && (
+        <span key={props.agent.n} className="agent-tag" role="status">
+          via {props.agent.by ? `${props.agent.by}'s` : "someone's"} agent
+        </span>
+      )}
       <header className="note-head">
         <span className={`author${props.mine ? " you" : ""}`} title={`Created by ${props.mine ? "you" : note.author}`}>
           {props.mine ? "You" : `by ${note.author}`}
