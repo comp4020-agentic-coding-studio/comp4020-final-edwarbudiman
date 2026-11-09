@@ -55,6 +55,20 @@ async function setup(prefix = "a") {
   return { a, board, token: await tokenFor(a) };
 }
 
+// The server allows 200 sign-ups an hour from one address and the whole suite
+// shares that, so users who don't need a clean board are made once and reused.
+const once = <T>(make: () => Promise<T>): (() => Promise<T>) => {
+  let p: Promise<T> | undefined;
+  return () => (p ??= make());
+};
+/** A user for tests that only talk protocol and never touch their board. */
+const sharedAgent = once(setup);
+/** Someone who only watches a board over a socket, or visits one. */
+const sharedVisitor = once(async () => {
+  const v = await signup("v");
+  return { v, vt: await tokenFor(v) };
+});
+
 const noteIds = (text: string) => [...text.matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
 const overlap = (p: { x: number; y: number }, q: { x: number; y: number }) => p.x < q.x + NOTE_W && p.x + NOTE_W > q.x && p.y < q.y + NOTE_H && p.y + NOTE_H > q.y;
 
@@ -85,7 +99,7 @@ describe("token REST", () => {
   });
 
   it("needs a cookie session: a bearer token can't reach /api routes", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     for (const [method, path] of [["GET", "/api/me/token"], ["POST", "/api/me/token"], ["GET", "/api/me"]] as const) {
       const res = await fetch(new URL(path, baseUrl), { method, headers: { authorization: `Bearer ${token}` } });
       expect(res.status, `${method} ${path}`).toBe(401);
@@ -93,13 +107,13 @@ describe("token REST", () => {
   });
 
   it("refuses a cross-site POST to make a token", async () => {
-    const a = await signup("a");
+    const { a } = await sharedAgent();
     const res = await fetch(new URL("/api/me/token", baseUrl), { method: "POST", headers: { cookie: a.cookie, origin: "https://evil.example" } });
     expect(res.status).toBe(403);
   });
 
   it("records last_used_at when the token is used", async () => {
-    const { a, token } = await setup();
+    const { a, token } = await sharedAgent();
     await call(token, "read_board");
     expect(typeof (await a.call("GET", "/api/me/token")).body.last_used_at).toBe("number");
   });
@@ -123,7 +137,7 @@ describe("auth on /mcp", () => {
   });
 
   it("a bad bearer header fails even when a valid cookie is sent too", async () => {
-    const a = await signup("a");
+    const { a } = await sharedAgent();
     const r = await rpc(null, ping, { authorization: "Bearer nope", cookie: a.cookie });
     expect(r.status).toBe(401);
     expect((await rpc(null, ping, { cookie: a.cookie })).status).toBe(200); // the cookie alone is fine
@@ -152,7 +166,7 @@ describe("auth on /mcp", () => {
 
 describe("protocol", () => {
   it("answers GET with 405, and refuses a cross-site Origin", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     const get = await fetch(new URL("/mcp", baseUrl), { headers: { authorization: `Bearer ${token}` } });
     expect(get.status).toBe(405);
     const evil = await rpc(token, { jsonrpc: "2.0", id: 1, method: "ping" }, { origin: "https://evil.example" });
@@ -160,7 +174,7 @@ describe("protocol", () => {
   });
 
   it("initialize echoes a supported version, falls back to the latest otherwise, and lists tools capability", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     for (const v of ["2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"]) {
       const r = await rpc(token, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: v, capabilities: {}, clientInfo: { name: "t", version: "1" } } });
       expect(r.json.result.protocolVersion).toBe(v);
@@ -172,14 +186,14 @@ describe("protocol", () => {
   });
 
   it("a notification gets 202 and no body; ping gets {}", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     const n = await rpc(token, { jsonrpc: "2.0", method: "notifications/initialized" });
     expect(n.status).toBe(202);
     expect((await rpc(token, { jsonrpc: "2.0", id: 9, method: "ping" })).json).toEqual({ jsonrpc: "2.0", id: 9, result: {} });
   });
 
   it("tools/list names exactly the eight tools, each with an input schema", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     const r = await rpc(token, { jsonrpc: "2.0", id: 1, method: "tools/list" });
     const tools = r.json.result.tools as { name: string; inputSchema: { type: string } }[];
     expect(tools.map((t) => t.name).sort()).toEqual(["add_notes", "comment_on_note", "delete_notes", "edit_note", "find_notes", "move_notes_to_section", "read_board", "set_status"]);
@@ -187,7 +201,7 @@ describe("protocol", () => {
   });
 
   it("returns JSON-RPC errors for an unknown method, an unknown tool, bad JSON and a bad envelope", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     expect((await rpc(token, { jsonrpc: "2.0", id: 1, method: "nope" })).json.error.code).toBe(-32601);
     expect((await call(token, "no_such_tool")).json.error.code).toBe(-32602);
     expect((await rpc(token, { id: 1, method: "ping" })).json.error.code).toBe(-32600);
@@ -197,7 +211,7 @@ describe("protocol", () => {
   });
 
   it("caps the body at 64 KB", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     const big = await fetch(new URL("/mcp", baseUrl), {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -220,7 +234,7 @@ describe("protocol", () => {
     expect(limited.json.error.message).toContain("rate limited");
     expect(limited.status).toBe(429);
     // the limit is per person: someone else is unaffected
-    const other = await setup("b");
+    const other = await sharedAgent();
     expect((await rpc(other.token, { jsonrpc: "2.0", id: 1, method: "ping" })).status).toBe(200);
   });
 });
@@ -275,7 +289,7 @@ describe("read_board and find_notes", () => {
 
   it("says who wrote a note and its colour when it isn't the person's own", async () => {
     const { a, board } = await setup("a");
-    const visitor = await signup("v");
+    const { v: visitor } = await sharedVisitor();
     const theirs = await mkNote(visitor, board.id, { text: "from a visitor", color: "blue", x: 50, y: 50 });
     const t = (await tool(await tokenFor(a), "read_board")).text;
     expect(t).toContain(`#${theirs.id} (blue, by ${visitor.username}) from a visitor`);
@@ -284,8 +298,7 @@ describe("read_board and find_notes", () => {
   it("reads a visited board and a channel by name, and says so when the channel isn't joined", async () => {
     const { a, board, token } = await setup("a");
     await mkNote(a, board.id, { text: "public one" });
-    const v = await signup("v");
-    const vt = await tokenFor(v);
+    const { v, vt } = await sharedVisitor();
     expect((await tool(vt, "read_board", { board: a.username })).text).toContain("public one");
 
     const slug = (await a.call("POST", "/api/channels", { name: `chan${Date.now()}`, visibility: "key", key: secret("sesame-key-1") })).body.board.slug;
@@ -300,7 +313,7 @@ describe("read_board and find_notes", () => {
 
 describe("set_status", () => {
   it("moves a note through the three states and the status persists", async () => {
-    const { a, board, token } = await setup();
+    const { a, board, token } = await sharedAgent();
     const n = await mkNote(a, board.id);
     for (const [status, stored] of [["on progress", "progress"], ["done", "done"], ["none", null]] as const) {
       const r = await tool(token, "set_status", { note_id: n.id, status });
@@ -311,7 +324,7 @@ describe("set_status", () => {
   });
 
   it("rejects a bad status or note id as a tool error, and a note that doesn't exist", async () => {
-    const { a, board, token } = await setup();
+    const { a, board, token } = await sharedAgent();
     const n = await mkNote(a, board.id);
     expect((await tool(token, "set_status", { note_id: n.id, status: "progress" })).isError).toBe(true);
     expect((await tool(token, "set_status", { note_id: "x", status: "done" })).isError).toBe(true);
@@ -323,7 +336,7 @@ describe("set_status", () => {
   it("a second browser sees the change live with an agent:touch naming the person; a reload still has it", async () => {
     const { a, board, token } = await setup("a");
     const n = await mkNote(a, board.id);
-    const watcher = await signup("w");
+    const { v: watcher } = await sharedVisitor();
     const live = await connect(watcher, board.id);
     await tool(token, "set_status", { note_id: n.id, status: "done" });
     const side = await live.next((m) => m.type === "note:side" && m.id === n.id);
@@ -338,7 +351,7 @@ describe("set_status", () => {
     const { a, board, token } = await setup("a");
     await a.call("PATCH", "/api/me", { anonymous: true });
     const n = await mkNote(a, board.id);
-    const watcher = await signup("w");
+    const { v: watcher } = await sharedVisitor();
     const live = await connect(watcher, board.id);
     await tool(token, "set_status", { note_id: n.id, status: "done" });
     expect((await live.next((m) => m.type === "agent:touch")).by).toBeNull();
@@ -348,7 +361,7 @@ describe("set_status", () => {
   it("an agent:touch only reaches viewers who can see the note (a private note stays private)", async () => {
     const { a, board, token } = await setup("a");
     const n = await mkNote(a, board.id, { visibility: "private" });
-    const watcher = await signup("w");
+    const { v: watcher } = await sharedVisitor();
     const live = await connect(watcher, board.id);
     const owner = await connect(a, board.id);
     await tool(token, "set_status", { note_id: n.id, status: "done" });
@@ -434,7 +447,7 @@ describe("add_notes", () => {
   });
 
   it("validates the batch: 1 to 20 notes, text present and at most 280, a known colour", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     expect((await tool(token, "add_notes", { notes: [] })).isError).toBe(true);
     expect((await tool(token, "add_notes", { notes: Array.from({ length: 21 }, () => ({ text: "x" })) })).isError).toBe(true);
     expect((await tool(token, "add_notes", { notes: [{ text: "" }] })).isError).toBe(true);
@@ -447,8 +460,7 @@ describe("add_notes", () => {
 
   it("adds to a channel the person belongs to, as a member, and a visitor's note on someone's board is the visitor's", async () => {
     const { a, board } = await setup("a");
-    const v = await signup("v");
-    const vt = await tokenFor(v);
+    const { v, vt } = await sharedVisitor();
     await tool(vt, "add_notes", { board: a.username, notes: [{ text: "from my agent" }] });
     const seen = (await boardOf(a, a.username)).notes.find((n: any) => n.text === "from my agent");
     expect(seen.author).toBe(v.username);
@@ -462,7 +474,7 @@ describe("add_notes", () => {
 
   it("broadcasts note:upsert and an agent:touch for each note to viewers", async () => {
     const { board, token, a } = await setup("a");
-    const watcher = await signup("w");
+    const { v: watcher } = await sharedVisitor();
     const live = await connect(watcher, board.id);
     const r = await tool(token, "add_notes", { notes: [{ text: "live one" }, { text: "live two" }] });
     for (const id of noteIds(r.text)) {
@@ -505,7 +517,7 @@ describe("move_notes_to_section, edit_note, comment_on_note", () => {
   });
 
   it("edit_note rewrites text and refuses text over 280; comment_on_note posts as the person", async () => {
-    const { a, board, token } = await setup();
+    const { a, board, token } = await sharedAgent();
     const n = await mkNote(a, board.id, { text: "before" });
     expect((await tool(token, "edit_note", { note_id: n.id, text: "after" })).isError).toBe(false);
     expect((await boardOf(a, a.username)).notes.find((x: any) => x.id === n.id).text).toBe("after");
@@ -525,7 +537,7 @@ describe("delete_notes", () => {
     const { a, board, token } = await setup();
     const keep = await mkNote(a, board.id, { text: "keep me" });
     const drop = await mkNote(a, board.id, { text: "drop me" });
-    const watcher = await signup("w");
+    const { v: watcher } = await sharedVisitor();
     const live = await connect(watcher, board.id);
 
     const stale = await tool(token, "delete_notes", { notes: [{ id: drop.id, text: "drop" }, { id: keep.id, text: "KEEP ME" }] });
@@ -544,7 +556,7 @@ describe("delete_notes", () => {
   });
 
   it("skips a note that doesn't exist and rejects a malformed request", async () => {
-    const { token } = await setup();
+    const { token } = await sharedAgent();
     const gone = await tool(token, "delete_notes", { notes: [{ id: 99999999, text: "x" }] });
     expect(gone.isError).toBe(true);
     expect(gone.text).toContain("skipped");
