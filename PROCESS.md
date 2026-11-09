@@ -1,130 +1,135 @@
 # Process overview
 
-<!-- DRAFT: rewrite in your own words before the crit 8 cutoff, then delete
-     this comment. -->
+## The topic
 
-## Choosing the topic
+My messages and to-do lists were scattered and cluttered. I wanted a post-it
+board, like FigJam. You put a note where you like, and its position shows its
+priority and its group. Other people can come to your board and leave a note.
+When they are there at the same time, you see their cursor, so the board
+feels less lonely.
 
-I wanted a place for the messages and to-do lists that end up scattered and
-cluttered: a post-it board, like FigJam, where you put notes wherever you like
-and their position is how you prioritise and group them. What makes it
-multi-user is that other people can come to your board and leave you a note,
-and being there with them at the same time makes it feel less lonely.
+## The stack, and why
 
-## Starting the project with DeepSeek Harness
+I started in DeepSeek Harness (DSH), with the COMP4020 course skills loaded
+([`6672660`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/6672660)).
+First, the agent read the brief, the crit specs and the fixed parts of the
+repo (`fly.toml`, the `Dockerfile`, `spec/`). This kept the plan on the real
+constraints and not on the agent's memory.
 
-I spun the project off in DeepSeek Harness, with the COMP4020 course skills
-loaded into it. Before discussing ideas, I had the agent pull the
-final-project brief, the specs for crits 8–10 and my group's cutoffs from the
-course site, and read the fixed parts of the repo (`fly.toml`, the
-`Dockerfile`, the shipped `spec/` checks). That grounded everything after it
-in the course's actual constraints rather than the agent's memory, and it
-caught an early mistake: with no crit group set, the crit 8 deadline showed as
-already past. Once I set my group, the real cutoff was the next morning.
+I used the agent to measure options, not to make the decisions:
 
-## Using the agent to measure and decide
+- **Database.** It compared six options against one 256 MB machine and one
+  volume. It ran `node:sqlite` on Node 24 to prove that it works. The
+  experimental warning is the cost.
+- **Real-time.** It compared WebSockets, SSE and polling. Live cursors send
+  many messages from each client, so I chose WebSockets.
+- **I made the calls.** I did not always take its recommendation. I chose an
+  infinite canvas, not a fixed board, and React, not plain TypeScript.
 
-I treated the agent as something to argue with rather than something to hand
-the build to:
+The stack is Node 24 and TypeScript on the server, React and Vite on the
+client, SQLite on the Fly volume, and WebSockets. The planning session made
+only a backlog
+([`a0ca454`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/a0ca454)),
+so the plan, not a long chat, was the handoff to the build.
 
-- **It challenged the idea first.** It pointed out that, as I first listed it
-  (accounts, boards, channels, chat), the app was close to the brief's "median
-  answer", so I had to tie each feature to a reason or drop it.
-- **It measured the options against the constraints.** For the database it
-  compared six options against one 256 MB machine and one volume, and it ran
-  `node:sqlite` on my local Node 24 to check that it works, finding the
-  experimental warning as a cost. For real-time it weighed WebSockets, SSE
-  and polling against what the app needs (live cursors mean frequent messages
-  from every client).
-- **I made the calls.** The agent asked structured questions with a
-  recommended option, and I didn't always take it: I chose an infinite canvas
-  over the recommended fixed board, and React over plain TypeScript.
+## Why I left DeepSeek Harness
 
-The result is Node 24 and TypeScript on the server, React and Vite on the
-client, SQLite through `node:sqlite` on the Fly volume, and WebSockets for
-real-time.
+DSH built a first version from the backlog, and the checks passed. But two
+problems stopped me. First, DSH was not stable enough. It was a developer
+preview, and its repository warns of breaking changes. Sessions did not
+always continue reliably. Second, it built the backlog too literally: a
+dashboard of users and a "paper" look. I wanted something simpler. You open
+the app and you are on your own board, like Excalidraw.
 
-## How the app will be built
+Thus I moved to Claude Code with Opus. I did not give it the backlog again. I
+told it to forget the old design and refine the core: a white, minimal look;
+no dashboard, so after log-in you are on your board at `/`; then selection,
+copy and paste, labels and live cursors. Before it built, it asked the
+questions that changed its work, and it disagreed with me where it had a
+reason. It tested in the browser and found two real bugs. I checked the
+result by hand. The personal board was done at
+[`957d95c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/957d95c).
 
-The planning session only produced a backlog
-([`a0ca454`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/a0ca454)).
-It records the decisions, the smallest schema, and the tasks cut into
-checkpoints that can each be shipped. Each task is marked as mine or the
-agent's, and the README, this file and the reflections are mine. Building
-happens in a fresh session that starts from that backlog, so the plan, not a
-long chat, is the handoff between sessions.
+The lesson is about the harness, not the model. A capable model in an
+unstable harness was less useful than a stable harness I could control. The
+research note argues this point from the literature.
 
-## Switching to Claude Code for the build
+## Too many skills, too few pull requests
 
-DeepSeek Harness spun the backlog off into a first working version: a server,
-a client, and the spec checks passing. But it wasn't getting at what I
-wanted. It built the backlog faithfully, including a dashboard of users and
-a warm "paper" look, when what I actually had in mind was simpler: open the
-app and you're on your own board, like Excalidraw, with nothing in the way.
+Before the pipeline, I tried many skill sets: Matt Pocock's `grill-me`,
+Lauren Tan's pstack and `poteto-agent`, and ideas from posts on X. Each one
+was one command to install. They stayed on my computer, and almost none of
+them got to a pull request. I read more, but reading did not tell me what to
+keep. I needed a process that tested each idea before it went into `main`.
 
-So I spun up Claude Code with Opus and used it to give feedback on what I
-wanted, rather than handing it the backlog again. I told it to forget the
-pre-made design and refine the core first:
+## The pipeline
 
-- **The look.** White and minimal, like Excalidraw. It asked me first
-  whether I wanted the hand-drawn style or a clean one; I chose clean for now,
-  with the note styles and font kept as tokens so I can change them later.
-- **The flow.** No dashboard: after log-in you're on your own board at `/`,
-  showing only your notes; other people's boards are at `/<username>`.
-- **The interactions.** Select notes (one, or several with a box or
-  Shift-click), copy and paste them, double-click to edit in place. Then
-  labels with a filter, and other people's live cursors with avatars you can
-  click to follow.
+I built an agent pipeline in Herdr
+([`9659d7f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/9659d7f)).
+One idea gets one git worktree (`feat/<idea>`) and one Herdr workspace. Each
+role is a tab with its own Claude session: lead, researcher, decider, spiker,
+builder and reviewer. The roles are markdown files in
+`.claude/skills/orchestrate-postits/roles/`. The scripts that start and watch
+them are in `scripts/orch/`. Each idea has its own ports, so spikes and
+builds run in parallel with `main`.
 
-Before building, it asked me the questions that changed what it would do
-(multi-select or single, what "focus" on double-click means, which visual
-style), and it pushed back where it disagreed: it argued against putting the
-saved-boards navigation on the right before we settle where chat and
-presence go, so that part is still being discussed. It tested in the browser
-as it went and caught two real bugs I would have hit (double-clicking a note
-created a new one on top of it; typing straight after creating a note lost
-the first letters). I then checked everything by hand.
+The handoff between roles is files, not chat: `idea.md`, `research.md`,
+`decision.md`, `brief.md`, then reports. Each report starts with a token for
+its round, so no role reads an old report as a new one.
 
-The personal board is done for this checkpoint
-([`957d95c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/957d95c)),
-and so far it's all good.
+I stay in the loop at taste gates. I try each spike in the browser and run
+`/taste`. My reactions go in `docs/taste.md`, which every role reads (for
+example
+[`963d2fc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/963d2fc)).
+Only I merge into `main`, after a reviewer agent runs the checks and uses the
+real app. Features arrived as pull requests, for example the docs site
+([`6818997`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/6818997))
+and the note sidebar
+([`0167ee3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/0167ee3)).
+The `/docs/` page shows each role, skill and feature.
 
-## Creating a pipeline for Claude so it can manage multiple roles and build features
+This pipeline is also how I sorted the skills. pstack's per-role model
+budgets now set which model each role uses. A skill that did not help a spike
+or a review did not stay.
 
-<!-- HINT: notes for you to write this section in your own words, then
-     delete this comment. Points to cover:
+## What the spikes taught
 
-- Why: one long chat per feature mixed research, design, and code, and
-  lost context. I wanted several ideas moving in parallel, each with a
-  clear owner, and me only stepping in to judge.
-- The shape: one idea = one git worktree (`feat/<idea>`) + one Herdr
-  workspace. Each role is a tab running its own Claude session:
-  lead (the idea's orchestrator) → researcher → decider → spiker (a
-  throwaway `spike/<idea>` branch, never merged) → builder → reviewer.
-  Roles are plain markdown files in
-  `.claude/skills/orchestrate-postits/roles/`; the scripts that start and
-  watch them are in `scripts/orch/` (`new-idea.sh`, `spawn.sh`, `wait.sh`,
-  `status.sh`, `resume.sh`, `retire.sh`).
-- Handoff is files, not chat: idea.md → research.md → decision.md →
-  brief.md → reports. Each report starts with a per-round token so a
-  stale report from an earlier round is never read as the new one.
-- I stay in the loop at "taste gates": I try each spike in the browser
-  and run `/taste`, and my reactions go in `docs/taste.md`, which every role reads.
-  Small fixes I type straight into the spiker's tab ("## Tweaks").
-  Only I merge into `main`.
-- Each idea gets its own ports, so spikes and builds run side by side
-  without clashing with main (8080/5173).
-- Dry run on note-arrows: research ~7 min, decide ~21 min, then three
-  spikes. The spikes changed the decision (four-sided nub, magnetic
-  movable ends, two lines for A↔B, arrow colour), so for small UI ideas
-  the spike taught more than the research. Proposed change: size each idea
-  first, and give small ideas a lighter research and decide stage.
-- Something that broke: Herdr doesn't bring agents back after a
-  restart, so all the workers silently went "gone" mid-build. Fix:
-  `spawn.sh` now pins each Claude session id, and `resume.sh` reopens a
-  worker with its whole conversation, keeping the same round and report.
-  The lead can resume any of its own roles, so after a restart I only
-  resume the leads and they bring back their workers.
-- What to reflect on: is this overkill for one person? Where did it save
-  me time and where did it cost me time? What did the taste gates catch that tests didn't?
--->
+The first full run was note-arrows. Research took about 7 minutes and the
+decision about 21. Then three spikes changed the decision: a four-sided nub,
+magnetic movable ends, two lines for A↔B, and arrow colour
+([`789e166`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/789e166)).
+For small UI ideas, the spike taught more than the research. Thus small ideas
+should get a shorter research stage.
+
+## Corrections go into the harness
+
+When an agent made a mistake, I put the fix in the harness, not only in the
+code:
+
+- **Agents could not find Node.** Node and pnpm are pinned by mise. I told
+  every role to use `mise exec`
+  ([`a7eb841`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/a7eb841)).
+- **Workers stopped after a Herdr restart.** Herdr does not bring agents
+  back. Now `spawn.sh` keeps each session id, and a lead can resume its dead
+  workers with their full conversation
+  ([`6fc7174`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/6fc7174)).
+- **Cleanup was manual and incomplete.** `retire.sh` now does all of it:
+  ports, worktrees, branches, state and the Herdr workspace
+  ([`3e52cc1`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/3e52cc1)).
+- **Reflection looked at the code, not the setup.** The reflect stage now
+  runs Pocock's `/retro` first. It asks what in the environment failed
+  ([`4305727`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/4305727)).
+  Treude and Baltes (2026) show that only some `/retro` changes help, so I
+  keep a change only when a later idea shows that it works.
+
+The promises the build cannot check are tests in `spec/`: real-time,
+persistence, routes, notes, arrows, chat and the sidebar.
+
+## Was it worth it?
+
+For one person, the pipeline is heavy. The research stage often cost more
+time than it saved. But it saved time in two places. I could run several
+ideas in parallel and step in only to judge. And the taste gates found
+problems that tests did not, such as how arrows feel when you drag them. The
+largest benefit was a filter: an idea now goes into `main` only after it
+passes a spike, my judgement and a review.
