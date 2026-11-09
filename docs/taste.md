@@ -36,6 +36,8 @@ Each line ends with the idea it came from and the date.
 
 <!-- Newest first: date, idea, what was tried, the owner's reaction in their words. -->
 
+- 2026-11-09, agent-mcp, build (reviewer-1 approved, PR #8; tried locally on 5213 with Claude Code connected over /mcp): "okay, i tested it and it's good. we can merge it to main" → merged.
+
 - 2026-11-09, agent-discovery, spike-1 (brief 1: robots.txt with Content-Signal, sitemap, Accept: text/markdown and .md twins on /, /readme/, /docs/**, Link header, 404 on unknown /.well-known/*): "okay, continue on" → build.
 
 - 2026-11-09, agent-mcp, spike-1 (hand-rolled /mcp with read_board / set_status / add_notes into a section, token + setup message in Settings, ?v=a glow + "via X's agent" tag vs ?v=b ghost cursor): "all good, continue on. be aware that our link url would be https://comp4020-final-edwarbudiman.fly.dev/, not localhost." Picked "Glow + tag (?v=a)" when asked. → build.
