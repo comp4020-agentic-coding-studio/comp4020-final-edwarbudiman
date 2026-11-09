@@ -134,6 +134,23 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX note_comments_note ON note_comments(note_id, created_at);
   `,
+  // 8: board sections, named tinted zones drawn behind the notes. A note's
+  // section is worked out from its position, never stored. They never overlap.
+  `
+  CREATE TABLE board_sections (
+    id         INTEGER PRIMARY KEY,
+    board_id   INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    name       TEXT    NOT NULL,
+    x          REAL    NOT NULL,
+    y          REAL    NOT NULL,
+    w          REAL    NOT NULL,
+    h          REAL    NOT NULL,
+    color      TEXT    NOT NULL,
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX board_sections_board ON board_sections(board_id);
+  `,
 ];
 
 export function openDb(dataDir: string): DB {

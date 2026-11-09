@@ -49,10 +49,26 @@ export interface ArrowRow {
   to_t: number | null;
   color: string | null;
 }
+export interface SectionRow {
+  id: number;
+  board_id: number;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string;
+  created_by: number;
+  created_at: number;
+}
 export type Side = "top" | "right" | "bottom" | "left";
 export const SIDES: readonly Side[] = ["top", "right", "bottom", "left"];
 
 export const COLORS = ["yellow", "pink", "blue", "green", "orange", "purple"] as const;
+export const SECTION_COLORS = ["yellow", "blue", "green", "pink", "purple", "orange"] as const;
+export const SECTION_NAME_MAX = 40;
+export const SECTION_MIN_W = 80;
+export const SECTION_MIN_H = 60;
 export const SIDE_STATUSES = ["progress", "done"] as const;
 export type SideStatus = (typeof SIDE_STATUSES)[number];
 export const NOTE_MAX = 280;
@@ -71,6 +87,8 @@ export const hooks = {
   lockHolder: (_noteId: number): number | null => null,
   arrowUpserted: (_board: Board, _arrow: ArrowRow): void => {},
   arrowDeleted: (_board: Board, _arrow: ArrowRow): void => {},
+  sectionUpserted: (_board: Board, _section: SectionRow): void => {},
+  sectionDeleted: (_board: Board, _section: SectionRow): void => {},
   /** A note's visibility changed: re-send (or retract) the arrows touching it, per viewer. */
   noteArrowsChanged: (_board: Board, _note: NoteRow): void => {},
   /** Something on a note's back side (status, proof, comments) changed. */
@@ -226,7 +244,7 @@ export function userBoard(db: DB, user: User, username: string) {
   if (!board) throw new HttpError(404, "no such user");
   markSeen(db, board.id, user.id);
   const notes = listNotes(db, board, user);
-  return { board: boardOut(db, board, user), notes, arrows: listArrows(db, board, notes) };
+  return { board: boardOut(db, board, user), notes, arrows: listArrows(db, board, notes), sections: listSections(db, board) };
 }
 
 export function channelBoard(db: DB, user: User, slug: string) {
@@ -241,7 +259,7 @@ export function channelBoard(db: DB, user: User, slug: string) {
     }
   }
   markSeen(db, board.id, user.id);
-  return { board: boardOut(db, board, user), notes: listNotes(db, board, user), arrows: [] };
+  return { board: boardOut(db, board, user), notes: listNotes(db, board, user), arrows: [], sections: listSections(db, board) };
 }
 
 export function directory(db: DB) {
@@ -543,6 +561,123 @@ export function deleteArrow(db: DB, user: User, arrowId: number): void {
   db.prepare("DELETE FROM note_arrows WHERE id = ?").run(arrow.id);
   logAction(user.username, "arrow.delete", { board: board.id, arrow: arrow.id });
   hooks.arrowDeleted(board, arrow);
+}
+
+// ---------------------------------------------------------------- sections
+
+// Named, tinted rectangles behind the notes. Which notes are "in" one is
+// worked out by the client from positions, so moving a section never touches a
+// note. Sections on a board never overlap (touching edges is fine). On a user
+// board only its owner writes; on a channel any member does. Everyone who can
+// see the board sees its sections.
+
+const SECTION_COLS = "id, board_id, name, x, y, w, h, color, created_by, created_at";
+const SECTION_COORD_MAX = 1_000_000;
+
+export function sectionOut(r: SectionRow) {
+  return { id: r.id, boardId: r.board_id, name: r.name, x: r.x, y: r.y, w: r.w, h: r.h, color: r.color };
+}
+
+export function getSection(db: DB, id: number): SectionRow | undefined {
+  return db.prepare(`SELECT ${SECTION_COLS} FROM board_sections WHERE id = ?`).get(id) as SectionRow | undefined;
+}
+
+function listSections(db: DB, board: Board) {
+  const rows = db.prepare(`SELECT ${SECTION_COLS} FROM board_sections WHERE board_id = ? ORDER BY id`).all(board.id) as unknown as SectionRow[];
+  return rows.map(sectionOut);
+}
+
+function canWriteSections(db: DB, board: Board, user: User): boolean {
+  return board.kind === "user" ? board.owner_id === user.id : isMember(db, board.id, user.id);
+}
+
+function sectionNumber(v: unknown, key: string, min?: number): number {
+  if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > SECTION_COORD_MAX) throw new HttpError(400, `${key} must be a number`);
+  if (min !== undefined && v < min) throw new HttpError(400, `${key} must be at least ${min}`);
+  return v;
+}
+
+function sectionName(v: unknown): string {
+  if (typeof v !== "string") throw new HttpError(400, "name must be a string");
+  const name = v.trim();
+  if (name.length < 1 || name.length > SECTION_NAME_MAX) throw new HttpError(400, `name must be 1 to ${SECTION_NAME_MAX} characters`);
+  return name;
+}
+
+function sectionColor(v: unknown): string {
+  if (typeof v !== "string" || !(SECTION_COLORS as readonly string[]).includes(v)) {
+    throw new HttpError(400, `color must be one of ${SECTION_COLORS.join(", ")}`);
+  }
+  return v;
+}
+
+function assertNoOverlap(db: DB, boardId: number, r: { x: number; y: number; w: number; h: number }, exceptId: number): void {
+  const clash = db
+    .prepare("SELECT 1 FROM board_sections WHERE board_id = ? AND id <> ? AND x < ? AND x + w > ? AND y < ? AND y + h > ?")
+    .get(boardId, exceptId, r.x + r.w, r.x, r.y + r.h, r.y);
+  if (clash) throw new HttpError(409, "sections can't overlap");
+}
+
+export function createSection(db: DB, user: User, boardId: number, body: Record<string, unknown>) {
+  const board = getBoard(db, boardId);
+  if (!board) throw new HttpError(404, "no such board");
+  if (!canWriteSections(db, board, user)) {
+    throw new HttpError(403, board.kind === "user" ? "only the board's owner can draw sections" : "only channel members can draw sections");
+  }
+  const name = sectionName(body.name);
+  const rect = { x: sectionNumber(body.x, "x"), y: sectionNumber(body.y, "y"), w: sectionNumber(body.w, "w", SECTION_MIN_W), h: sectionNumber(body.h, "h", SECTION_MIN_H) };
+  const color = body.color === undefined || body.color === null ? SECTION_COLORS[0] : sectionColor(body.color);
+  return tx(db, () => {
+    assertNoOverlap(db, board.id, rect, 0);
+    const r = db
+      .prepare("INSERT INTO board_sections (board_id, name, x, y, w, h, color, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(board.id, name, rect.x, rect.y, rect.w, rect.h, color, user.id, Date.now());
+    const row = getSection(db, Number(r.lastInsertRowid))!;
+    logAction(user.username, "section.create", { board: board.id, section: row.id });
+    hooks.sectionUpserted(board, row);
+    return sectionOut(row);
+  });
+}
+
+/** Write access to an existing section; someone who can't write gets a 403. */
+function sectionForWrite(db: DB, user: User, sectionId: number): { board: Board; section: SectionRow } {
+  const section = getSection(db, sectionId);
+  const board = section && getBoard(db, section.board_id);
+  if (!section || !board) throw new HttpError(404, "no such section");
+  if (!canWriteSections(db, board, user)) {
+    // a channel's non-member shouldn't learn it exists, but the brief asks for a plain 403
+    throw new HttpError(403, board.kind === "user" ? "only the board's owner can change sections" : "only channel members can change sections");
+  }
+  return { board, section };
+}
+
+export function updateSection(db: DB, user: User, sectionId: number, body: Record<string, unknown>) {
+  const { board, section } = sectionForWrite(db, user, sectionId);
+  if (!["name", "x", "y", "w", "h", "color"].some((k) => k in body)) throw new HttpError(400, "nothing to change");
+  const name = "name" in body ? sectionName(body.name) : section.name;
+  const rect = {
+    x: "x" in body ? sectionNumber(body.x, "x") : section.x,
+    y: "y" in body ? sectionNumber(body.y, "y") : section.y,
+    w: "w" in body ? sectionNumber(body.w, "w", SECTION_MIN_W) : section.w,
+    h: "h" in body ? sectionNumber(body.h, "h", SECTION_MIN_H) : section.h,
+  };
+  const color = "color" in body ? sectionColor(body.color) : section.color;
+  return tx(db, () => {
+    assertNoOverlap(db, board.id, rect, section.id);
+    db.prepare("UPDATE board_sections SET name = ?, x = ?, y = ?, w = ?, h = ?, color = ? WHERE id = ?").run(name, rect.x, rect.y, rect.w, rect.h, color, section.id);
+    const row = getSection(db, section.id)!;
+    logAction(user.username, "section.update", { board: board.id, section: section.id });
+    hooks.sectionUpserted(board, row);
+    return sectionOut(row);
+  });
+}
+
+/** Deletes the zone only; the notes inside it are untouched. */
+export function deleteSection(db: DB, user: User, sectionId: number): void {
+  const { board, section } = sectionForWrite(db, user, sectionId);
+  db.prepare("DELETE FROM board_sections WHERE id = ?").run(section.id);
+  logAction(user.username, "section.delete", { board: board.id, section: section.id });
+  hooks.sectionDeleted(board, section);
 }
 
 // ---------------------------------------------------------------- channels
