@@ -32,7 +32,7 @@ export interface NoteRow {
   z: number;
   visibility: "public" | "private";
   labels: string; // JSON array
-  status: Status;
+  proof: number; // 0 or 1: the creator confirmed the finish criteria
   version: number;
   created_at: number;
   updated_at: number;
@@ -53,9 +53,10 @@ export type Side = "top" | "right" | "bottom" | "left";
 export const SIDES: readonly Side[] = ["top", "right", "bottom", "left"];
 
 export const COLORS = ["yellow", "pink", "blue", "green", "orange", "purple"] as const;
-export const STATUSES = ["todo", "doing", "done"] as const;
-export type Status = (typeof STATUSES)[number];
+export const SIDE_STATUSES = ["progress", "done"] as const;
+export type SideStatus = (typeof SIDE_STATUSES)[number];
 export const NOTE_MAX = 280;
+export const COMMENT_MAX = 500;
 export const LABEL_MAX = 24;
 export const LABELS_PER_NOTE = 5;
 export const DESCRIPTION_MAX = 140;
@@ -72,10 +73,12 @@ export const hooks = {
   arrowDeleted: (_board: Board, _arrow: ArrowRow): void => {},
   /** A note's visibility changed: re-send (or retract) the arrows touching it, per viewer. */
   noteArrowsChanged: (_board: Board, _note: NoteRow): void => {},
+  /** Something on a note's back side (status, proof, comments) changed. */
+  sideChanged: (_board: Board, _note: NoteRow): void => {},
 };
 
 const BOARD_COLS = "b.id, b.kind, b.owner_id, u.username AS owner_name, b.slug, b.name, b.visibility, b.key_hash, b.description, b.created_at";
-const NOTE_COLS = "n.id, n.board_id, n.author_id, u.username AS author, n.text, n.color, n.x, n.y, n.z, n.visibility, n.labels, n.status, n.version, n.created_at, n.updated_at";
+const NOTE_COLS = "n.id, n.board_id, n.author_id, u.username AS author, n.text, n.color, n.x, n.y, n.z, n.visibility, n.labels, n.proof, n.version, n.created_at, n.updated_at";
 
 export function getBoard(db: DB, id: number): Board | undefined {
   return db.prepare(`SELECT ${BOARD_COLS} FROM boards b LEFT JOIN users u ON u.id = b.owner_id WHERE b.id = ?`).get(id) as Board | undefined;
@@ -120,7 +123,51 @@ export function canMove(board: Board, note: NoteRow, userId: number): boolean {
   return board.kind === "channel" || note.author_id === userId || board.owner_id === userId;
 }
 
-export function noteOut(board: Board, note: NoteRow, userId: number) {
+/** What a note shows of its back side to one viewer. */
+export interface SideSummary {
+  myStatus: SideStatus | null;
+  proof: boolean;
+  commentCount: number;
+  doneCount: number;
+  progressCount: number;
+  needsProof: boolean;
+}
+
+interface SummaryRow {
+  id: number;
+  my: SideStatus | null;
+  done: number;
+  progress: number;
+  comments: number;
+}
+
+// One statement however many notes: the counts are correlated subqueries on
+// note_status's primary key and note_comments' (note_id, created_at) index.
+const SUMMARY_SQL = `SELECT n.id,
+    (SELECT s.status FROM note_status s WHERE s.note_id = n.id AND s.user_id = @me) AS my,
+    (SELECT COUNT(*) FROM note_status s WHERE s.note_id = n.id AND s.status = 'done') AS done,
+    (SELECT COUNT(*) FROM note_status s WHERE s.note_id = n.id AND s.status = 'progress') AS progress,
+    (SELECT COUNT(*) FROM note_comments c WHERE c.note_id = n.id) AS comments
+  FROM notes n`;
+
+function summaryOf(note: NoteRow, row: SummaryRow | undefined, userId: number): SideSummary {
+  const doneCount = row?.done ?? 0;
+  return {
+    myStatus: row?.my ?? null,
+    proof: note.proof === 1,
+    commentCount: row?.comments ?? 0,
+    doneCount,
+    progressCount: row?.progress ?? 0,
+    needsProof: note.author_id === userId && doneCount > 0 && note.proof !== 1,
+  };
+}
+
+export function noteSummary(db: DB, note: NoteRow, userId: number): SideSummary {
+  const row = db.prepare(`${SUMMARY_SQL} WHERE n.id = @id`).get({ id: note.id, me: userId }) as SummaryRow | undefined;
+  return summaryOf(note, row, userId);
+}
+
+export function noteOut(db: DB, board: Board, note: NoteRow, userId: number, summary: SideSummary = noteSummary(db, note, userId)) {
   return {
     id: note.id,
     boardId: note.board_id,
@@ -132,12 +179,12 @@ export function noteOut(board: Board, note: NoteRow, userId: number) {
     z: note.z,
     visibility: note.visibility,
     labels: readLabels(note.labels),
-    status: note.status,
     version: note.version,
     createdAt: note.created_at,
     updatedAt: note.updated_at,
     canEdit: canEdit(board, note, userId),
     canMove: canMove(board, note, userId),
+    ...summary,
   };
 }
 
@@ -168,7 +215,8 @@ export function boardOut(db: DB, board: Board, user: User) {
 
 function listNotes(db: DB, board: Board, user: User) {
   const rows = db.prepare(`SELECT ${NOTE_COLS} FROM notes n JOIN users u ON u.id = n.author_id WHERE n.board_id = ? ORDER BY n.z`).all(board.id) as unknown as NoteRow[];
-  return rows.filter((n) => canSee(board, n, user.id)).map((n) => noteOut(board, n, user.id));
+  const sums = new Map((db.prepare(`${SUMMARY_SQL} WHERE n.board_id = @b`).all({ b: board.id, me: user.id }) as unknown as SummaryRow[]).map((r) => [r.id, r]));
+  return rows.filter((n) => canSee(board, n, user.id)).map((n) => noteOut(db, board, n, user.id, summaryOf(n, sums.get(n.id), user.id)));
 }
 
 // ---------------------------------------------------------------- reads
@@ -228,11 +276,9 @@ function parseColor(v: unknown): string {
   return v;
 }
 
-function parseStatus(v: unknown): Status {
-  if (typeof v !== "string" || !(STATUSES as readonly string[]).includes(v)) {
-    throw new HttpError(400, `status must be one of ${STATUSES.join(", ")}`);
-  }
-  return v as Status;
+/** Status is per person now (PUT /api/notes/:id/status); the old shared field is refused. */
+function refuseStatus(body: Record<string, unknown>): void {
+  if (body.status !== undefined) throw new HttpError(400, "status is set per person with PUT /api/notes/:id/status");
 }
 
 /** Trimmed, de-duplicated ignoring case, stored as a JSON array. */
@@ -266,24 +312,24 @@ export function createNote(db: DB, user: User, boardId: number, body: Record<str
   const color = body.color === undefined ? "yellow" : parseColor(body.color);
   const visibility = body.visibility === undefined ? "public" : parseVisibility(board, body.visibility);
   const labels = body.labels === undefined ? "[]" : parseLabels(body.labels);
-  const status = body.status === undefined ? "todo" : parseStatus(body.status);
+  refuseStatus(body);
   const x = num(body, "x", true) ?? 0;
   const y = num(body, "y", true) ?? 0;
   const now = Date.now();
   const id = tx(db, () => {
     const { z } = db.prepare("SELECT COALESCE(MAX(z), 0) + 1 AS z FROM notes WHERE board_id = ?").get(board.id) as { z: number };
     const r = db
-      .prepare("INSERT INTO notes (board_id, author_id, text, color, x, y, z, visibility, labels, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(board.id, user.id, text, color, x, y, z, visibility, labels, status, now, now);
+      .prepare("INSERT INTO notes (board_id, author_id, text, color, x, y, z, visibility, labels, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(board.id, user.id, text, color, x, y, z, visibility, labels, now, now);
     return Number(r.lastInsertRowid);
   });
   const note = getNote(db, id)!;
   logAction(user.username, "note.create", { board: board.id, note: id, visibility, color });
   hooks.noteUpserted(board, note);
-  return noteOut(board, note, user.id);
+  return noteOut(db, board, note, user.id);
 }
 
-function noteForWrite(db: DB, user: User, noteId: number): { board: Board; note: NoteRow } {
+export function noteForWrite(db: DB, user: User, noteId: number): { board: Board; note: NoteRow } {
   const note = getNote(db, noteId);
   const board = note && getBoard(db, note.board_id);
   // a note you can't see is a note that doesn't exist, as far as you know
@@ -299,7 +345,8 @@ export function updateNote(db: DB, user: User, noteId: number, body: Record<stri
   const args: (string | number)[] = [];
   const changed: string[] = [];
 
-  const content = body.text !== undefined || body.color !== undefined || body.visibility !== undefined || body.labels !== undefined || body.status !== undefined;
+  const content = body.text !== undefined || body.color !== undefined || body.visibility !== undefined || body.labels !== undefined;
+  refuseStatus(body);
   if (content && !canEdit(board, note, user.id)) throw new HttpError(403, "you can only edit your own notes here");
   if (body.text !== undefined) {
     sets.push("text = ?");
@@ -320,11 +367,6 @@ export function updateNote(db: DB, user: User, noteId: number, body: Record<stri
     sets.push("labels = ?");
     args.push(parseLabels(body.labels));
     changed.push("labels");
-  }
-  if (body.status !== undefined) {
-    sets.push("status = ?");
-    args.push(parseStatus(body.status));
-    changed.push("status");
   }
 
   const moving = body.x !== undefined || body.y !== undefined || body.front === true;
@@ -359,7 +401,7 @@ export function updateNote(db: DB, user: User, noteId: number, body: Record<stri
   });
   hooks.noteUpserted(board, updated);
   if (changed.includes("visibility")) hooks.noteArrowsChanged(board, updated);
-  return noteOut(board, updated, user.id);
+  return noteOut(db, board, updated, user.id);
 }
 
 export function deleteNote(db: DB, user: User, noteId: number): void {

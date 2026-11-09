@@ -1,11 +1,12 @@
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import { SERVER_ENDPOINTS, SERVER_PAGES, proxyKey } from "./src/routes.ts";
 
 const target = process.env.API_URL ?? "http://localhost:8080";
 
 // The client builds to client/dist, which the server serves. In development
-// Vite serves it and passes the API, WebSocket and /readme/ through.
+// Vite serves it and passes the API, WebSocket and /readme/ and /docs/ through.
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [react()],
@@ -15,10 +16,10 @@ export default defineConfig({
     // Each feature worktree gets its own pair (scripts/orch/spawn.sh)
     port: Number(process.env.CLIENT_PORT ?? 5173),
     strictPort: true,
-    proxy: {
-      "/api": { target, changeOrigin: false },
-      "/readme": { target, changeOrigin: false },
-      "/ws": { target, ws: true, changeOrigin: false },
-    },
+    proxy: Object.fromEntries(
+      // every server-owned top-level path, anchored (see src/routes.ts)
+      [...SERVER_ENDPOINTS, ...SERVER_PAGES]
+        .map((name) => [proxyKey(name), { target, changeOrigin: false, ws: name === "ws" }]),
+    ),
   },
 });
