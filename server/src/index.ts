@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { changePassword, login, logout, publicUser, requireUser, seedDemo, signup, updateMe } from "./auth.ts";
-import { channelBoard, createArrow, createChannel, createNote, deleteArrow, deleteNote, updateArrow, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
+import { channelBoard, createArrow, createChannel, createNote, createSection, deleteArrow, deleteSection, updateSection, deleteNote, updateArrow, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
 import { addComment, deleteComment, editComment, readSide, setProof, setStatus } from "./side.ts";
 import { config } from "./config.ts";
 import { openDb } from "./db.ts";
@@ -91,6 +91,20 @@ route("PATCH", /^\/api\/arrows\/(\d+)$/, async (req, res, [id]) => {
 route("DELETE", /^\/api\/arrows\/(\d+)$/, (req, res, [id]) => {
   deleteArrow(db, requireUser(db, req), Number(id));
   sendJson(res, 200, { ok: true });
+});
+
+route("POST", /^\/api\/boards\/(\d+)\/sections$/, async (req, res, [id]) => {
+  const user = requireUser(db, req);
+  sendJson(res, 201, { section: createSection(db, user, Number(id), await readJson(req)) });
+});
+route("PATCH", /^\/api\/sections\/(\d+)$/, async (req, res, [id]) => {
+  const user = requireUser(db, req);
+  sendJson(res, 200, { section: updateSection(db, user, Number(id), await readJson(req)) });
+});
+route("DELETE", /^\/api\/sections\/(\d+)$/, (req, res, [id]) => {
+  deleteSection(db, requireUser(db, req), Number(id));
+  res.writeHead(204, { "cache-control": "no-store" });
+  res.end();
 });
 
 // ---------------------------------------------------------------- channels

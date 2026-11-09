@@ -33,7 +33,8 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 - [Log in](./login.md) covers demo-account login, session cookie, and the board landing redirect.
 - [Create and edit a note](./create-edit-note.md) covers placing, typing, committing, and persisting a note.
-- [Move, select, and label notes](./move-select-label.md) covers dragging, multi-select, color, labels, and the label filter.
+- [Move, select, and colour notes](./move-select-label.md) covers dragging, multi-select and colour.
+- [Label sections](./label-sections.md) covers drawing named zones, the no-overlap rule and its warning, the section filter, what a visitor sees, and the removal of per-note labels.
 - [Note status](./note-status.md) covers stepping a note through to do, doing, done with S / Shift+S or the Status button, and seeing it live.
 - [Live cursors and presence](./live-cursors-presence.md) covers seeing another user's cursor and following them.
 - [Channels and chat](./channels-chat.md) covers joining a channel, posting a chat message, and sidebar unread counts.

@@ -349,7 +349,7 @@ export class Space {
       ctx.fill();
       ctx.shadowColor = "transparent";
 
-      const foot = n.author !== shot.me || n.visibility === "private" || n.labels.length > 0;
+      const foot = n.author !== shot.me || n.visibility === "private";
       ctx.fillStyle = n.text ? "#26262b" : "rgba(0,0,0,0.35)";
       ctx.font = `400 15px ${FONT}`;
       ctx.textBaseline = "top";
@@ -360,18 +360,6 @@ export class Space {
       if (foot) {
         ctx.font = `400 11px ${FONT}`;
         ctx.textBaseline = "middle";
-        let lx = 14;
-        for (const l of n.labels) {
-          const lw = Math.min(ctx.measureText(l).width + 12, 90);
-          if (lx + lw > NOTE_W - 60) break;
-          ctx.fillStyle = "rgba(0,0,0,0.07)";
-          ctx.beginPath();
-          ctx.roundRect(lx, NOTE_H - 26, lw, 16, 8);
-          ctx.fill();
-          ctx.fillStyle = "rgba(0,0,0,0.62)";
-          ctx.fillText(l, lx + 6, NOTE_H - 18, lw - 12);
-          lx += lw + 3;
-        }
         const meta = [n.author !== shot.me ? n.author : "", n.visibility === "private" ? "private" : ""].filter(Boolean).join(" · ");
         ctx.fillStyle = "rgba(0,0,0,0.5)";
         ctx.textAlign = "right";
