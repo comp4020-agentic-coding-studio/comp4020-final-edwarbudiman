@@ -11,6 +11,7 @@ import { attachRealtime, liveStats, userChanged } from "./realtime.ts";
 import { underPrefix } from "./routes.ts";
 import { serveClient, serveReadme } from "./static.ts";
 import { serveDocs } from "./docs.ts";
+import { negotiate, notFound, serveDocsMarkdown, serveRobots, serveRootMarkdown, serveSitemap } from "./discovery.ts";
 
 const db = openDb(config.dataDir);
 await seedDemo(db);
@@ -179,8 +180,21 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
     throw new HttpError(pathMatched ? 405 : 404, pathMatched ? "method not allowed" : "no such endpoint");
   }
   if (method !== "GET" && method !== "HEAD") throw new HttpError(405, "method not allowed");
-  if (underPrefix(path, "readme")) return serveReadme(req, res, path);
-  if (underPrefix(path, "docs")) return serveDocs(req, res, path);
+  // for agents (see routes.ts): each root file by name, never the SPA shell
+  if (path === "/robots.txt") return serveRobots(req, res);
+  if (path === "/sitemap.xml") return serveSitemap(req, res);
+  if (path === "/index.md" || path === "/readme.md") return serveRootMarkdown(req, res, path);
+  if (underPrefix(path, ".well-known")) return notFound(req, res);
+  if (underPrefix(path, "readme")) {
+    if (await negotiate(req, res, path)) return;
+    return serveReadme(req, res, path);
+  }
+  if (underPrefix(path, "docs")) {
+    if (path.endsWith(".md")) return serveDocsMarkdown(req, res, path);
+    if (await negotiate(req, res, path)) return;
+    return serveDocs(req, res, path);
+  }
+  if (path === "/" && (await negotiate(req, res, path))) return;
   return serveClient(req, res, path);
 }
 

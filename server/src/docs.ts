@@ -368,6 +368,37 @@ const SECTION_INTRO: Record<string, string> = {
   roles: "# Roles\n\nEach feature is built by a small team of agents, each with one job and one instruction file. I'm the owner: I make the product calls and do every merge.\n",
 };
 
+/** URL of the Markdown twin of a docs page: /docs/ is /docs/index.md, /docs/a/b/ is /docs/a/b.md. */
+export const docsMarkdownUrl = (htmlPath: string): string =>
+  htmlPath.endsWith("/") && htmlPath.split("/").filter(Boolean).length === 1 ? `${htmlPath}index.md` : `${htmlPath.replace(/\/$/, "")}.md`;
+
+/**
+ * Every page of the current version as Markdown, keyed by its HTML path
+ * (/docs/, /docs/features/, /docs/features/notes/). The source on disk with its
+ * front matter removed, plus a list of links for a section's index page. Older
+ * versions and the versions table are not here.
+ */
+export async function currentDocsMarkdown(): Promise<Map<string, string>> {
+  const versions = await loadVersions();
+  const dir = versionDir(versions, versions[0]);
+  const prefix = base(versions, versions[0]);
+  const [general, ...sectioned] = await Promise.all([loadSection(dir, ""), ...SECTIONS.map((s) => loadSection(dir, s))]);
+  const out = new Map<string, string>();
+  for (const p of general) out.set(hrefIn(prefix, p), p.body);
+  SECTIONS.forEach((sec, i) => {
+    const pool = sectioned[i];
+    if (!pool.length) return;
+    const own = pool.find((p) => p.slug === "index");
+    const list = pool
+      .filter((p) => p.slug !== "index")
+      .map((p) => `- [${p.title}](${docsMarkdownUrl(hrefIn(prefix, p))})${(sec === "roles" ? p.meta.tagline : p.meta.summary) ? `: ${sec === "roles" ? p.meta.tagline : p.meta.summary}` : ""}`)
+      .join("\n");
+    out.set(`${prefix}${sec}/`, `${own?.body ?? SECTION_INTRO[sec]}\n${list}\n`);
+    for (const p of pool) if (p.slug !== "index") out.set(hrefIn(prefix, p), p.body);
+  });
+  return out;
+}
+
 export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (path === "/docs") return redirect(res, "/docs/");
   if (path === "/docs/infima.css") {
