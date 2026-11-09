@@ -10,9 +10,9 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
-- `label-sections` — build (builder-1) — zones, no overlap, owner+members edit; drop per-note labels; a toolbar tool draws named label sections on the board that group the notes inside them
-- `agent-mcp` — decide (lead-1, large; research.md 6cba9a1 recommends a remote MCP with 5 job tools) — make the app fully agent-able: self-serve API tokens, token-authed API reusing canSee/canEdit, an MCP server at /mcp (read and write), plus a Claude skill. Extends ADR-0001 / checkpoint F. Arranging into sections depends on label-sections
-- `agent-discovery` — decide (lead-1, small) — checkpoint G: robots/sitemap/llms.txt, markdown negotiation, documented /api with a pointer to tokens and /mcp. Builds after agent-mcp merges
+- `label-sections` — brief 2 approved, PR open (reviewer-3 approved 94038cb: filter frames the ticked sections; PR #5 merged 6805847) — zones, no overlap, owner+members edit; drop per-note labels; a toolbar tool draws named label sections on the board that group the notes inside them
+- `agent-mcp` — PR open (#8, reviewer-1 approved d7bbdf3, docs page agent.md 14ac5af, main merged in 2296d31, 148 tests pass; spike approved, glow + tag; decision b91cf52: shape A, 8 job tools incl. edit/comment/guarded delete, setup by pasting a message into the agent) — make the app fully agent-able: self-serve API tokens, token-authed API reusing canSee/canEdit, an MCP server at /mcp (read and write), plus a Claude skill. Extends ADR-0001 / checkpoint F. Arranging into sections depends on label-sections
+- `agent-discovery` — brief 1 merged (PR #7, 5c5fb2e); brief 2 waits for agent-mcp; small) — checkpoint G: robots/sitemap/llms.txt, markdown negotiation, documented /api with a pointer to tokens and /mcp. Builds after agent-mcp merges
 
 ## Decisions
 
@@ -24,7 +24,7 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 ## To-do for the owner
 
 <!-- Decide sessions, taste gates (with the /taste reminder), merges, blocked dialogs. -->
-- `agent-mcp`: research is ready to decide (3 shapes). Decide in the agent-mcp lead tab.
+- `agent-mcp`: PR #8 ready to merge. Try the feature and its page /docs/features/agent/, run /taste, then merge, `scripts/sync-worktrees.sh` and `scripts/orch/retire.sh agent-mcp`. agent-discovery brief 2 is waiting on this merge.
 - Route-guard follow-up (from note-sidebar reviewer-5): spec/routes.test.ts misses new SPA pages in main.tsx and `path ===` server dispatch. Migration 7 wipes note statuses on deploy.
 
 
