@@ -10,7 +10,7 @@ import { HttpError, readJson, sameOrigin, sendJson } from "./http.ts";
 import { logAction, logEvent, recentActionCounts } from "./log.ts";
 import { attachRealtime, liveStats, userChanged } from "./realtime.ts";
 import { underPrefix } from "./routes.ts";
-import { serveClient, serveReadme } from "./static.ts";
+import { getPageExists, serveClient, serveReadme } from "./static.ts";
 import { serveDocs } from "./docs.ts";
 import { negotiate, notFound, serveMarkdownTwin, serveRobots, serveSitemap } from "./discovery.ts";
 
@@ -196,7 +196,12 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
   }
   // the agent endpoint: no Origin needed (agents aren't browsers), its own auth
   if (path === "/mcp") return handleMcp(db, req, res);
-  if (method !== "GET" && method !== "HEAD") throw new HttpError(405, "method not allowed");
+  // a path that wouldn't exist under GET is a 404 whatever the method; only a
+  // path that does exist can be answered 405
+  if (method !== "GET" && method !== "HEAD") {
+    if (!(await getPageExists(db, path))) return notFound(req, res);
+    throw new HttpError(405, "method not allowed");
+  }
   // for agents (see routes.ts): each root file by name, never the SPA shell
   if (path === "/robots.txt") return serveRobots(req, res);
   if (path === "/sitemap.xml") return serveSitemap(req, res);
@@ -212,7 +217,7 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
     return serveDocs(req, res, path);
   }
   if (path === "/" && (await negotiate(req, res, path))) return;
-  return serveClient(req, res, path);
+  return serveClient(db, req, res, path);
 }
 
 const server = createServer((req, res) => {

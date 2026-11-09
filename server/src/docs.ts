@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { basename, extname, join } from "node:path";
 import { Marked } from "marked";
 import { config } from "./config.ts";
+import { notFound } from "./discovery.ts";
 
 /**
  * /docs/: what each feature does and how to use it, plus how the app is built
@@ -355,10 +356,6 @@ async function sendStatic(res: ServerResponse, file: string, type: string): Prom
   }
 }
 
-function notFound(res: ServerResponse): void {
-  res.writeHead(404, { "content-type": "text/plain" });
-  res.end("not found");
-}
 
 function redirect(res: ServerResponse, location: string): void {
   res.writeHead(301, { location });
@@ -401,17 +398,49 @@ export async function currentDocsMarkdown(): Promise<Map<string, string>> {
   return out;
 }
 
-export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+/** True when GET `path` under /docs would find something (a page, its .md twin, an asset, a redirect), so other methods can tell 405 from 404. */
+export async function docsPathExists(path: string): Promise<boolean> {
+  if (path === "/docs" || path === "/docs/" || path === "/docs/infima.css") return true;
+  const asset = path.match(/^\/docs\/assets\/((?:[\w-]+\/)?[\w-][\w.-]*)$/);
+  if (asset) {
+    try {
+      return (await stat(join(ASSETS(), asset[1]))).isFile() && extname(asset[1]).toLowerCase() in ASSET_TYPES;
+    } catch {
+      return false;
+    }
+  }
+  const versions = await loadVersions();
+  const pages = new Set<string>();
+  for (const v of versions) {
+    const prefix = base(versions, v);
+    const dir = versionDir(versions, v);
+    pages.add(prefix);
+    pages.add(`${prefix}versions/`);
+    const [general, ...sectioned] = await Promise.all([loadSection(dir, ""), ...SECTIONS.map((s) => loadSection(dir, s))]);
+    for (const p of general) pages.add(hrefIn(prefix, p));
+    SECTIONS.forEach((sec, i) => {
+      pages.add(`${prefix}${sec}/`);
+      for (const p of sectioned[i]) pages.add(hrefIn(prefix, p));
+    });
+  }
+  if (path.endsWith(".md")) {
+    const current = await currentDocsMarkdown();
+    return [...current.keys()].some((k) => docsMarkdownUrl(k) === path);
+  }
+  return pages.has(path.endsWith("/") ? path : `${path}/`);
+}
+
+export async function serveDocs(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (path === "/docs") return redirect(res, "/docs/");
   if (path === "/docs/infima.css") {
-    if (!(await sendStatic(res, join(SITE(), "infima.min.css"), "text/css; charset=utf-8"))) notFound(res);
+    if (!(await sendStatic(res, join(SITE(), "infima.min.css"), "text/css; charset=utf-8"))) notFound(req, res);
     return;
   }
   // images and videos from docs/readme-assets/: plain names, one optional sub-folder
   const asset = path.match(/^\/docs\/assets\/((?:[\w-]+\/)?[\w-][\w.-]*)$/);
   if (asset) {
     const type = ASSET_TYPES[extname(asset[1]).toLowerCase()];
-    if (!type || !(await sendStatic(res, join(ASSETS(), asset[1]), type))) notFound(res);
+    if (!type || !(await sendStatic(res, join(ASSETS(), asset[1]), type))) notFound(req, res);
     return;
   }
 
@@ -426,7 +455,7 @@ export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path
   }
   if (rest && !rest.endsWith("/")) return redirect(res, `${path}/`);
   const parts = rest.split("/").filter(Boolean);
-  if (parts.length > 2 || parts.some((p) => !/^[\w-]+$/.test(p))) return notFound(res);
+  if (parts.length > 2 || parts.some((p) => !/^[\w-]+$/.test(p))) return notFound(req, res);
 
   const prefix = base(versions, version);
   const dir = versionDir(versions, version);
@@ -460,7 +489,7 @@ export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path
   } else if (parts.length === 1) {
     page = general.find((p) => p.slug === parts[0] && p.slug !== "index");
   }
-  if (!page) return notFound(res);
+  if (!page) return notFound(req, res);
 
   const current = page.slug === "versions" ? `${prefix}versions/` : hrefIn(prefix, page);
   const pathInVersion = current.slice(prefix.length);
