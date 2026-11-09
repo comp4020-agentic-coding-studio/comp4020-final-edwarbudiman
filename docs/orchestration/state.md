@@ -10,10 +10,10 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
-- `note-sidebar` — review (fix round 2, reviewer-3) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
-- `label-sections` — decide (lead-1, short decide: small idea) — drop per-note labels; a toolbar tool draws named label sections on the board that group the notes inside them
-- `agent-mcp` — research (lead-1, large) — make the app fully agent-able: self-serve API tokens, token-authed API reusing canSee/canEdit, an MCP server at /mcp (read and write), plus a Claude skill. Extends ADR-0001 / checkpoint F. Arranging into sections depends on label-sections
-- `agent-discovery` — research (lead-1, small) — checkpoint G: robots/sitemap/llms.txt, markdown negotiation, documented /api with a pointer to tokens and /mcp. Builds after agent-mcp merges
+- `note-sidebar` — ready to merge (PR #4, route guard approved) — per-user status, creator-only proof checkbox, comments, in a sidebar opened by a button on the note
+- `label-sections` — build (builder-1) — zones, no overlap, owner+members edit; drop per-note labels; a toolbar tool draws named label sections on the board that group the notes inside them
+- `agent-mcp` — decide (lead-1, large; research.md 6cba9a1 recommends a remote MCP with 5 job tools) — make the app fully agent-able: self-serve API tokens, token-authed API reusing canSee/canEdit, an MCP server at /mcp (read and write), plus a Claude skill. Extends ADR-0001 / checkpoint F. Arranging into sections depends on label-sections
+- `agent-discovery` — decide (lead-1, small) — checkpoint G: robots/sitemap/llms.txt, markdown negotiation, documented /api with a pointer to tokens and /mcp. Builds after agent-mcp merges
 
 ## Decisions
 
@@ -25,7 +25,9 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 ## To-do for the owner
 
 <!-- Decide sessions, taste gates (with the /taste reminder), merges, blocked dialogs. -->
-- `note-sidebar`: hold the merge. During the last check the owner found /docs and /readme opening as boards; builder-3 is fixing it (Vite proxy plus SPA routes). PR #4 stays open.
+- `note-sidebar`: ready to merge. PR #4 is at b1d6c80 (route guard included). Merge it, then sync-worktrees.sh and retire.sh note-sidebar. Migration 7 wipes statuses on deploy. Follow-up: routes.test.ts misses new SPA pages in main.tsx and `path ===` server dispatch.
+- `agent-mcp`: research is ready to decide (3 shapes). Decide in the agent-mcp lead tab.
+
 
 ## Reflections
 
