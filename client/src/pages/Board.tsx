@@ -77,6 +77,7 @@ interface Section { id: number; boardId: number; name: string; x: number; y: num
 const SEC_MIN_W = 120;
 const SEC_MIN_H = 90;
 const SEC_NAME_MAX = 40;
+const SEC_BAR_H = 30; // the name bar's height, matches .section-name in styles.css
 const SEC_COLORS = ["yellow", "blue", "green", "pink", "purple", "orange"];
 const SEC_TINTS: Record<string, string> = { yellow: "#fde68a", blue: "#bfdbfe", green: "#bbf7d0", pink: "#fbcfe8", purple: "#ddd6fe", orange: "#fed7aa" };
 const secOverlap = (a: Section, b: Section) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -266,6 +267,9 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const [secDraft, setSecDraft] = useState<Rect | null>(null);
   const [secEdit, setSecEdit] = useState<number | null>(null);
   const secCancel = useRef(false);
+  const [secNew, setSecNew] = useState<{ rect: { x: number; y: number; w: number; h: number }; color: string } | null>(null);
+  const secNewRef = useRef<typeof secNew>(null);
+  secNewRef.current = secNew;
   const [secAlert, setSecAlert] = useState<{ msg: string; id: number | null; n: number } | null>(null);
   const secAlertTimer = useRef<number | null>(null);
   /** The loud "can't overlap" warning: a red toast at the top, and the zone that snapped back flashes. */
@@ -1402,12 +1406,20 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     if (rect.w < SEC_MIN_W || rect.h < SEC_MIN_H) return;
     const probe: Section = { id: 0, boardId: bid, name: "", color: "", ...rect };
     if (sectionsRef.current.some((o) => secOverlap(o, probe))) return alertSec("Sections can't overlap", null);
-    const color = SEC_COLORS[sectionsRef.current.length % SEC_COLORS.length];
-    api<{ section: Section }>("POST", `/api/boards/${bid}/sections`, { name: "Section", color, ...rect })
-      .then((r) => {
-        putSection(r.section);
-        setSecEdit(r.section.id);
-      })
+    // show the zone and its focused name input straight away, so early keystrokes go in the name
+    // and not to tool shortcuts. The zone is saved once the name is committed.
+    setSecNew({ rect, color: SEC_COLORS[sectionsRef.current.length % SEC_COLORS.length] });
+  }
+  function commitNewSection(raw: string) {
+    const draft = secNewRef.current;
+    const bid = boardRef.current?.id;
+    if (!draft || bid === undefined) return;
+    secNewRef.current = null; // Enter then blur must not save twice
+    secCancel.current = false;
+    setSecNew(null);
+    const name = raw.trim().slice(0, SEC_NAME_MAX) || "Section";
+    api<{ section: Section }>("POST", `/api/boards/${bid}/sections`, { name, color: draft.color, ...draft.rect })
+      .then((r) => putSection(r.section))
       .catch((err) => (err instanceof ApiError && err.status === 409 ? alertSec("Sections can't overlap", null) : flash(err instanceof ApiError ? err.message : "couldn't draw that section")));
   }
   function patchSection(id: number, change: Partial<Pick<Section, "name" | "x" | "y" | "w" | "h">>, before: Section) {
@@ -1770,6 +1782,12 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       }
       return;
     }
+    // the name bar's pointer capture sends its double-click here: that opens rename, never a new note
+    const bar = sectionsRef.current.find((c) => w.x >= c.x && w.x <= c.x + c.w && w.y >= c.y && w.y <= c.y + SEC_BAR_H);
+    if (bar) {
+      if (canSection) setSecEdit(bar.id);
+      return;
+    }
     void createNoteAt(w.x - NOTE_W / 2, w.y - NOTE_H / 2);
   }
 
@@ -1977,6 +1995,30 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
                 </div>
               );
             })}
+            {secNew && (() => {
+              const tint = SEC_TINTS[secNew.color];
+              const { x, y, w, h } = secNew.rect;
+              return (
+                <div className="section" data-section="new" style={{ left: x, top: y, width: w, height: h, background: `color-mix(in srgb, ${tint} 28%, transparent)`, borderColor: `color-mix(in srgb, ${tint} 90%, #555)` }}>
+                  <div className="section-name" style={{ background: `color-mix(in srgb, ${tint} 70%, white)` }}>
+                    <input
+                      autoFocus
+                      defaultValue=""
+                      placeholder="Section"
+                      maxLength={SEC_NAME_MAX}
+                      aria-label="Section name"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onBlur={(e) => commitNewSection(secCancel.current ? "" : e.target.value)}
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === "Escape") secCancel.current = true;
+                        if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur();
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
             {secDraft && (() => {
               const n = norm(secDraft);
               return <div className="section draft" style={{ left: n.x0, top: n.y0, width: n.x1 - n.x0, height: n.y1 - n.y0 }} />;

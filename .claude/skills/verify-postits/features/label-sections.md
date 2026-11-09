@@ -4,7 +4,7 @@ Sections replace per-note labels. In the toolbar, next to Arrow, the Section too
 
 ## Sub-features
 
-- `section-draw` choose the Section tool (or press `G`) and drag a rectangle (at least 120 by 90): a zone appears behind the notes with its name input focused. Type a name, Enter.
+- `section-draw` choose the Section tool (or press `G`) and drag a rectangle (at least 120 by 90): a zone appears behind the notes at once with its name input focused. Type a name, Enter; the zone is saved then.
 - `section-move` drag the name bar to move the zone. Notes inside stay where they are.
 - `section-resize` drag the grip at the bottom-right corner. Notes stay put.
 - `section-overlap` drawing, moving or resizing a zone onto another one snaps it back, shows a large red top-centre toast "Sections can't overlap" (about 2.8s) and flashes the snapped-back zone red for about 1s. Touching edges is allowed. The server answers 409.
@@ -29,6 +29,8 @@ Preconditions: `alice` (owner) and `bob` (visitor) in separate browser profiles 
 - **Move and resize.** Drag the name bar down: the zone moves, the notes do not (`x`/`y` in `notes` unchanged). Drag the corner grip: the zone grows, notes unchanged.
 - **Overlap.** Press `G`, drag a rectangle that overlaps "Plan": the red toast "Sections can't overlap" shows at the top and nothing is created. Draw a second zone on empty space, then drag its name bar onto "Plan": it snaps back, the toast shows, and it flashes red. Screenshot this within 2 seconds.
 - **Filter.** Click `Sections`, tick "Plan": the notes outside it fade and can't be clicked or box-selected. Screenshot. Double-click empty space outside the zone: the new note lands inside "Plan" and is visible. Reload: the tick is remembered.
+- **Rename by double-click (regression).** `left_click` twice quickly (or `double_click`) on a zone's name text: a `.section-name input` appears focused with the name selected, and `select count(*) from notes` does not change. A double-click on a name must never create a note. Do it on an owner board and on a channel board. Visitor: double-clicking a name opens no input and makes no note.
+- **Early typing after a draw.** Press `G`, drag a rectangle, and at once type "Plan" then Enter (no wait): the zone is named "Plan", and `g` or other letters did not switch tools.
 - **Rename and delete.** Double-click the name, type "Done", Enter: it renames for bob too. Click the ×: the zone goes, the notes remain (`select count(*) from notes` unchanged).
 - **No labels.** Select a note: the bottom bar has Colour, Edit, Status, Delete but no Label. Press `L`: nothing. A note that had labels before shows no chips.
 - **Visitor.** Bob's tab on `/alice`: the toolbar has no Section button, the name bars show no grab cursor, no ×, no grip, but `Sections` filters. Screenshot. `fetch('/api/boards/<id>/sections', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({name:'x',x:0,y:0,w:200,h:150})})` returns 403, and so do PATCH and DELETE on `/api/sections/<id>`.
