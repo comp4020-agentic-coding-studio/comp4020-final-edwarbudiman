@@ -36,6 +36,8 @@ Each line ends with the idea it came from and the date.
 
 <!-- Newest first: date, idea, what was tried, the owner's reaction in their words. -->
 
+- 2026-11-09, agent-mcp, spike-1 (hand-rolled /mcp with read_board / set_status / add_notes into a section, token + setup message in Settings, ?v=a glow + "via X's agent" tag vs ?v=b ghost cursor): "all good, continue on. be aware that our link url would be https://comp4020-final-edwarbudiman.fly.dev/, not localhost." Picked "Glow + tag (?v=a)" when asked. → build.
+
 - 2026-11-09, label-sections, spike-1 (client-only zones, G tool, snap-back on overlap, section filter, label UI removed): "so error popup that saying section can't overlap not visible enough, fix that, and i think we can ship it" → build, then PR.
 - 2026-11-09, note-sidebar, build (reviewer-2 approved, last check on the real build): "looks fine to me, then we can go PR" → PR.
 - 2026-11-09, note-sidebar, spike-2 (window-corner open button, animated sidebar, comments-only scroll, live proof; tweaks: more top padding for the text, then a three-section note with header strip, text and status footer): "i ask spiker-2 to redesign the post a little bit, now it has 3 section, and border as well. i like the thre section, and border, but it still not align well with the corner button, on top, it also shows whose post-it it is, but it's not explaining enough for me to see it as the creator of post-it"
