@@ -48,13 +48,13 @@ separate reviewer agent that runs the tests and uses the real app in a
 browser. I try every feature myself before I merge it, and save my reaction
 with `/taste` so the next spike starts from it.
 
-This workflow is part of what good means here. Before it, I kept trying new
-skill sets and whatever I'd just read about on X. They piled up on my machine
-and almost none of them landed in a pull request. A spike, my `/taste`
-verdict and a reviewer between an idea and `main` is what finally sorted
-what's worth keeping from what isn't.
+This workflow is part of what good means here. Before it, I tried many new
+skill sets and new ideas from posts on X. They stayed on my computer, and
+almost none of them got to a pull request. Now each idea goes through a
+spike, my `/taste` judgement and a review before it goes into `main`. This
+shows me which ideas to keep and which to discard.
 
-The workflow has more parts than fit here: the agent roles, the skills each
+The workflow has more parts than this page can show: the agent roles, the skills each
 one loads, the pipeline stages, and a page per feature showing how it was
 spiked, judged and built. They're all on the [docs page](/docs/), which the
 app serves next to this one. The source is in
