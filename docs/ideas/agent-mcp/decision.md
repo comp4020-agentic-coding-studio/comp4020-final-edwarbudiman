@@ -48,7 +48,7 @@ When the agent changes my board while I'm watching, which feels right: **(a)** a
 
 ## Sequencing
 
-**Build waits for label-sections to merge, then builds everything in one go** (owner's choice). The spike can run before that: it only needs a token, a minimal `/mcp` with `read_board` and `set_status`, and the two attribution treatments. It doesn't need section placement. note-sidebar must merge before the build too, because the status states and comments come from it.
+**One build, after label-sections merges** (owner's choice). Both dependencies were already on `main` when this was decided (note-sidebar 0167ee3, label-sections PR #6), and `main` was merged into `feat/agent-mcp` (c45afd6). So the build isn't blocked; it waits only on the spike's taste gate. The spike needs a token, a minimal `/mcp` with `read_board`, `set_status` and `add_notes` into a section, the chat setup message, and the two attribution treatments.
 
 ## Open questions
 
