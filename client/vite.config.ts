@@ -1,7 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
-import { SERVER_ENDPOINTS, SERVER_PAGES, proxyKey } from "./src/routes.ts";
+import { SERVER_DOT_DIRS, SERVER_ENDPOINTS, SERVER_FILES, SERVER_PAGES, dotDirProxyKey, fileProxyKey, proxyKey } from "./src/routes.ts";
 
 const target = process.env.API_URL ?? "http://localhost:8080";
 
@@ -16,10 +16,11 @@ export default defineConfig({
     // Each feature worktree gets its own pair (scripts/orch/spawn.sh)
     port: Number(process.env.CLIENT_PORT ?? 5173),
     strictPort: true,
-    proxy: Object.fromEntries(
+    proxy: Object.fromEntries([
       // every server-owned top-level path, anchored (see src/routes.ts)
-      [...SERVER_ENDPOINTS, ...SERVER_PAGES]
-        .map((name) => [proxyKey(name), { target, changeOrigin: false, ws: name === "ws" }]),
-    ),
+      ...[...SERVER_ENDPOINTS, ...SERVER_PAGES].map((name) => [proxyKey(name), { target, changeOrigin: false, ws: name === "ws" }]),
+      ...SERVER_FILES.map((name) => [fileProxyKey(name), { target, changeOrigin: false }]),
+      ...SERVER_DOT_DIRS.map((name) => [dotDirProxyKey(name), { target, changeOrigin: false }]),
+    ]),
   },
 });

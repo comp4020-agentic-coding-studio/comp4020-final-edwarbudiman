@@ -12,6 +12,9 @@ export const config = {
   clientDir: resolve(process.env.CLIENT_DIR ?? "./client/dist"),
   // Documented in README.md: the way in for markers and demos.
   demoPassword: process.env.DEMO_PASSWORD ?? "postit-demo",
+  // The address the world reaches the app at. Canonical, sitemap, robots and
+  // Link URLs are built from this, never from the request's Host header.
+  publicOrigin: (process.env.PUBLIC_ORIGIN ?? "https://comp4020-final-edwarbudiman.fly.dev").replace(/\/+$/, ""),
   sessionDays: 30,
   // Fly terminates TLS in front of the app, so "secure" is read from the
   // forwarded protocol; COOKIE_SECURE=1 forces it.
