@@ -29,7 +29,8 @@ const SLOT_BUDGET = 2_000_000; // collision checks one placement may spend befor
 
 // ---------------------------------------------------------------- protocol
 
-const VERSIONS = ["2025-03-26", "2025-06-18", "2026-07-28"];
+// 2025-11-25 is what Claude Code sends today; it is not in the brief, and without it the client refuses to connect.
+const VERSIONS = ["2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"];
 const LATEST = VERSIONS[VERSIONS.length - 1];
 const MAX_BODY = 64 * 1024;
 const RATE_LIMIT = 60; // calls per minute per token

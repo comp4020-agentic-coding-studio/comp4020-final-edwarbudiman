@@ -161,7 +161,7 @@ describe("protocol", () => {
 
   it("initialize echoes a supported version, falls back to the latest otherwise, and lists tools capability", async () => {
     const { token } = await setup();
-    for (const v of ["2025-03-26", "2025-06-18", "2026-07-28"]) {
+    for (const v of ["2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"]) {
       const r = await rpc(token, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: v, capabilities: {}, clientInfo: { name: "t", version: "1" } } });
       expect(r.json.result.protocolVersion).toBe(v);
       expect(r.json.result.capabilities.tools).toBeDefined();
