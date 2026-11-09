@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { api, ApiError, COLORS, LABEL_MAX, LABELS_PER_NOTE, STATUSES } from "../api.ts";
+import { api, ApiError, COLORS, STATUSES } from "../api.ts";
 import type { BoardInfo, Color, Note } from "../api.ts";
 import { LiveSocket } from "../socket.ts";
 import type { ServerMsg, Status } from "../socket.ts";
@@ -59,7 +59,6 @@ interface ClipItem {
   text: string;
   color: Color;
   visibility: Note["visibility"];
-  labels?: string[];
   arrows?: ClipArrow[];
   dx: number;
   dy: number;
@@ -70,7 +69,17 @@ interface Clip {
   x: number; // where the copied group's top-left was
   y: number;
 }
-type Tool = "select" | "hand" | "arrow";
+type Tool = "select" | "hand" | "arrow" | "section";
+// Sections: named, tinted zones behind the notes. A note is "in" the one that
+// holds its centre; that's worked out here from positions, never stored.
+interface Section { id: number; boardId: number; name: string; x: number; y: number; w: number; h: number; color: string }
+const SEC_MIN_W = 120;
+const SEC_MIN_H = 90;
+const SEC_NAME_MAX = 40;
+const SEC_COLORS = ["yellow", "blue", "green", "pink", "purple", "orange"];
+const SEC_TINTS: Record<string, string> = { yellow: "#fde68a", blue: "#bfdbfe", green: "#bbf7d0", pink: "#fbcfe8", purple: "#ddd6fe", orange: "#fed7aa" };
+const secOverlap = (a: Section, b: Section) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const secHolds = (c: Section, x: number, y: number) => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h;
 type Side = "top" | "right" | "bottom" | "left";
 interface Arrow { id: number; from: number; to: number; fromSide?: Side | null; fromT?: number | null; toSide?: Side | null; toT?: number | null; color?: Color | null }
 interface Snap { note: number; side: Side; t: number; x: number; y: number }
@@ -79,7 +88,7 @@ interface Peer {
   sid: string;
   name: string | null; // null: anonymous
 }
-type NewNote = { text: string; color: Color; visibility: Note["visibility"]; labels: string[]; x: number; y: number; arrows?: ClipArrow[] };
+type NewNote = { text: string; color: Color; visibility: Note["visibility"]; x: number; y: number; arrows?: ClipArrow[] };
 
 type Gesture =
   | { mode: "none" }
@@ -87,6 +96,9 @@ type Gesture =
   | { mode: "pinch"; ids: [number, number]; dist: number; mid: { x: number; y: number }; view: View }
   | { mode: "marquee"; pointerId: number; x0: number; y0: number; base: number[] }
   | { mode: "pending"; pointerId: number; noteId: number; sx: number; sy: number; touch: boolean; timer: number | null; pan: { ox: number; oy: number }; collapse: boolean }
+  | { mode: "section"; pointerId: number; x0: number; y0: number }
+  | { mode: "secMove"; pointerId: number; id: number; sx: number; sy: number; orig: Section }
+  | { mode: "secSize"; pointerId: number; id: number; sx: number; sy: number; orig: Section }
   | { mode: "arrow"; pointerId: number; from: number }
   | { mode: "arrowEnd"; pointerId: number; id: number; end: "from" | "to" }
   | { mode: "drag"; pointerId: number; ids: number[]; sx: number; sy: number; origs: Record<number, { x: number; y: number }>; moved: boolean; lastSent: number };
@@ -222,10 +234,32 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   };
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
-  const filterKey = `filter:${kind}/${slug}`;
-  const [filter, setFilter] = useState<Set<string>>(() => readFilter(filterKey)); // lower-cased labels; empty = show all
+  const filterKey = `sections-filter:${kind}/${slug}`;
+  const [filter, setFilter] = useState<Set<string>>(() => readFilter(filterKey)); // ids of the ticked sections; empty = show all
   const [filterOpen, setFilterOpen] = useState(false);
-  const [labelOpen, setLabelOpen] = useState(false);
+  const [sections, setSections] = useState<Section[]>([]);
+  const sectionsRef = useRef<Section[]>([]);
+  const [secDraft, setSecDraft] = useState<Rect | null>(null);
+  const [secEdit, setSecEdit] = useState<number | null>(null);
+  const secCancel = useRef(false);
+  const [secAlert, setSecAlert] = useState<{ msg: string; id: number | null; n: number } | null>(null);
+  const secAlertTimer = useRef<number | null>(null);
+  /** The loud "can't overlap" warning: a red toast at the top, and the zone that snapped back flashes. */
+  const alertSec = (msg: string, id: number | null) => {
+    if (secAlertTimer.current) window.clearTimeout(secAlertTimer.current);
+    setSecAlert((a) => ({ msg, id, n: (a?.n ?? 0) + 1 }));
+    secAlertTimer.current = window.setTimeout(() => setSecAlert(null), 2800);
+  };
+  const putSection = (sec: Section) => setSections((cur) => (cur.some((c) => c.id === sec.id) ? cur.map((c) => (c.id === sec.id ? sec : c)) : [...cur, sec]));
+  const dropSection = (id: number) => {
+    setSections((cur) => (cur.some((c) => c.id === id) ? cur.filter((c) => c.id !== id) : cur));
+    setFilter((f) => {
+      if (!f.has(String(id))) return f;
+      const next = new Set(f);
+      next.delete(String(id));
+      return next;
+    });
+  };
   const [peers, setPeers] = useState<Peer[]>([]);
   const [mySid, setMySid] = useState<string | null>(null);
   const [following, setFollowing] = useState<string | null>(null); // a peer's sid
@@ -277,17 +311,26 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   draftRef.current = draft;
   boardRef.current = board;
   filterRef.current = filter;
+  sectionsRef.current = sections;
   followingRef.current = following;
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
-  /** Hidden by the label filter? Filtered-out notes can't be selected or edited. */
-  const shown = (n: Note) => filterRef.current.size === 0 || n.labels.some((l) => filterRef.current.has(l.toLowerCase()));
-  /** The filter's labels as they're written on the notes, for stamping on new ones. */
-  const filterLabels = (): string[] => {
-    const out = new Map<string, string>();
-    for (const n of Object.values(notesRef.current)) for (const l of n.labels) if (filterRef.current.has(l.toLowerCase()) && !out.has(l.toLowerCase())) out.set(l.toLowerCase(), l);
-    return [...out.values()].slice(0, LABELS_PER_NOTE);
+  /** The section holding a note's centre. */
+  const secOf = (n: { x: number; y: number }) => sectionsRef.current.find((c) => secHolds(c, n.x + NOTE_W / 2, n.y + NOTE_H / 2));
+  /** Hidden by the section filter? Filtered-out notes can't be selected or edited. */
+  const shown = (n: Note) => {
+    if (filterRef.current.size === 0) return true;
+    const c = secOf(n);
+    return !!c && filterRef.current.has(String(c.id));
+  };
+  /** How far to move a would-be note (or group, by its box) so it sits inside the first ticked section. */
+  const intoFilter = (x: number, y: number, w: number, h: number) => {
+    const t = sectionsRef.current.find((c) => filterRef.current.has(String(c.id)));
+    if (!t) return { dx: 0, dy: 0 };
+    const cur = secOf({ x: x + w / 2 - NOTE_W / 2, y: y + h / 2 - NOTE_H / 2 });
+    if (cur && filterRef.current.has(String(cur.id))) return { dx: 0, dy: 0 };
+    return { dx: Math.round(t.x + t.w / 2 - w / 2 - x), dy: Math.round(t.y + t.h / 2 - h / 2 - y) };
   };
 
   const setView = useCallback((v: View | ((prev: View) => View)) => {
@@ -329,9 +372,14 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const load = useCallback(
     async (initial: boolean) => {
       try {
-        const r = await api<{ board: BoardInfo; notes: Note[]; arrows?: Arrow[] }>("GET", `/api/boards/${kind}/${encodeURIComponent(slug)}`);
+        const r = await api<{ board: BoardInfo; notes: Note[]; arrows?: Arrow[]; sections?: Section[] }>("GET", `/api/boards/${kind}/${encodeURIComponent(slug)}`);
         setBoard(r.board);
         setArrows(r.arrows ?? []);
+        const secs = r.sections ?? [];
+        setSections(secs);
+        sectionsRef.current = secs;
+        // a remembered filter can only name sections that still exist
+        setFilter((f) => (f.size === 0 ? f : new Set([...f].filter((id) => secs.some((c) => String(c.id) === id)))));
         setGate(null);
         if (initial) refreshSidebar(); // opening it just caught you up
         const map: Record<number, Note> = {};
@@ -406,10 +454,6 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   }, [view, viewKey]);
 
   useEffect(() => {
-    if (selected.size === 0) setLabelOpen(false);
-  }, [selected]);
-
-  useEffect(() => {
     sessionStorage.setItem(filterKey, JSON.stringify([...filter]));
     // whatever the filter now hides drops out of the selection
     const sel = [...selectedRef.current].filter((id) => notesRef.current[id] && shown(notesRef.current[id]));
@@ -459,7 +503,6 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       stopFollowing();
       setEditing(null);
       select([]);
-      setLabelOpen(false);
       setFilterOpen(false);
       setHelpOpen(false);
       setAccessOpen(false);
@@ -517,6 +560,17 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       case "arrow:upsert": {
         const arrow = m.arrow as Arrow;
         setArrows((prev) => (prev.some((a) => a.id === arrow.id) ? prev.map((a) => (a.id === arrow.id ? arrow : a)) : [...prev, arrow]));
+        return;
+      }
+      case "section:upsert": {
+        const sec = m.section as Section;
+        const g = gestureRef.current;
+        if ((g.mode === "secMove" || g.mode === "secSize") && g.id === sec.id) return; // mine, under my pointer
+        putSection(sec);
+        return;
+      }
+      case "section:delete": {
+        dropSection(m.id as number);
         return;
       }
       case "arrow:delete": {
@@ -699,6 +753,12 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
 
   async function createNoteAt(x: number, y: number) {
     if (!board) return;
+    if (filterRef.current.size) {
+      // a note made while filtering lands inside the first ticked section, so it stays in view
+      const m = intoFilter(x, y, NOTE_W, NOTE_H);
+      x += m.dx;
+      y += m.dy;
+    }
     const tempId = -++tempSeq.current;
     const now = Date.now();
     const temp: Note = {
@@ -711,7 +771,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       y: Math.round(y),
       z: 999_999,
       visibility: "public",
-      labels: filterLabels(), // a note made while filtering stays in view
+      labels: [],
       status: "todo",
       version: 0,
       createdAt: now,
@@ -733,7 +793,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     };
     let real: Note;
     try {
-      real = (await api<{ note: Note }>("POST", `/api/boards/${board.id}/notes`, { text: "", color: temp.color, x: temp.x, y: temp.y, visibility: "public", labels: temp.labels })).note;
+      real = (await api<{ note: Note }>("POST", `/api/boards/${board.id}/notes`, { text: "", color: temp.color, x: temp.x, y: temp.y, visibility: "public" })).note;
     } catch (err) {
       dropTemp();
       setEditing((e) => (e === tempId ? null : e));
@@ -777,7 +837,6 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           text: it.text.slice(0, NOTE_MAX),
           color: it.color,
           visibility: board.kind === "user" ? it.visibility : "public",
-          labels: it.labels,
           x: Math.round(it.x),
           y: Math.round(it.y),
         }),
@@ -871,24 +930,6 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     pointerFocus.current = false;
   }
 
-  /** Add a label to every selected note you may edit, or take it off them all. */
-  function applyLabel(label: string, add: boolean) {
-    const clean = label.trim().replace(/\s+/g, " ").slice(0, LABEL_MAX);
-    if (!clean) return;
-    const key = clean.toLowerCase();
-    let full = 0;
-    for (const id of selectedRef.current) {
-      const n = notesRef.current[id];
-      if (!n?.canEdit || id < 0) continue;
-      const has = n.labels.some((l) => l.toLowerCase() === key);
-      if (add && !has) {
-        if (n.labels.length >= LABELS_PER_NOTE) full++;
-        else void patchNote(id, { labels: [...n.labels, clean] });
-      } else if (!add && has) void patchNote(id, { labels: n.labels.filter((l) => l.toLowerCase() !== key) });
-    }
-    if (full) flash(`A note can have at most ${LABELS_PER_NOTE} labels, and ${full === 1 ? "one of these is" : `${full} of these are`} full.`);
-  }
-
   function recolourSelection(c: Color) {
     const aid = arrowSelRef.current;
     if (aid !== null) {
@@ -940,7 +981,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         .map((a) => ({ to: index.get(a.to)!, fromSide: a.fromSide ?? null, fromT: a.fromT ?? null, toSide: a.toSide ?? null, toT: a.toT ?? null, color: a.color ?? null }));
     return {
       text: list.map((n) => n.text).join("\n\n"),
-      items: list.map((n) => ({ text: n.text, color: n.color, visibility: n.visibility, labels: n.labels, arrows: arrowsOut(n), dx: n.x - x, dy: n.y - y })),
+      items: list.map((n) => ({ text: n.text, color: n.color, visibility: n.visibility, arrows: arrowsOut(n), dx: n.x - x, dy: n.y - y })),
       x,
       y,
     };
@@ -954,17 +995,23 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     const h = Math.max(...items.map((i) => i.dy)) + NOTE_H;
     let x = Math.round(at.x - w / 2);
     let y = Math.round(at.y - h / 2);
+    if (filterRef.current.size) {
+      // pasted while filtering: the group lands inside the first ticked section
+      const m = intoFilter(x, y, w, h);
+      x += m.dx;
+      y += m.dy;
+    }
     const key = `${x},${y}`;
     pasteSpot.current = pasteSpot.current?.key === key ? { key, n: pasteSpot.current.n + 1 } : { key, n: 0 };
     x += pasteSpot.current.n * PASTE_STEP;
     y += pasteSpot.current.n * PASTE_STEP;
-    void createMany(items.map((i) => ({ text: i.text, color: i.color, visibility: i.visibility, labels: i.labels ?? filterLabels(), arrows: i.arrows, x: x + i.dx, y: y + i.dy })));
+    void createMany(items.map((i) => ({ text: i.text, color: i.color, visibility: i.visibility, arrows: i.arrows, x: x + i.dx, y: y + i.dy })));
   }
 
   function duplicateSelection() {
     const clip = clipFromSelection();
     if (!clip) return;
-    void createMany(clip.items.map((i) => ({ text: i.text, color: i.color, visibility: i.visibility, labels: i.labels ?? [], arrows: i.arrows, x: clip.x + i.dx + PASTE_STEP, y: clip.y + i.dy + PASTE_STEP })));
+    void createMany(clip.items.map((i) => ({ text: i.text, color: i.color, visibility: i.visibility, arrows: i.arrows, x: clip.x + i.dx + PASTE_STEP, y: clip.y + i.dy + PASTE_STEP })));
   }
 
   // ---------------------------------------------------------------- keyboard
@@ -1021,12 +1068,11 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   }
 
   function onKeyDown(e: KeyboardEvent) {
-    if (e.key === "Escape" && (labelOpen || filterOpen)) {
-      setLabelOpen(false);
+    if (e.key === "Escape" && filterOpen) {
       setFilterOpen(false);
       return;
     }
-    if (isTyping(e.target) || editingRef.current !== null || helpOpen || accessOpen || labelOpen || filterOpen) return;
+    if (isTyping(e.target) || editingRef.current !== null || helpOpen || accessOpen || filterOpen) return;
     if ((e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       toggleView();
@@ -1124,16 +1170,13 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       case "H":
         setTool("hand");
         return;
+      case "g":
+      case "G":
+        if (boardRef.current && (boardRef.current.isOwner || boardRef.current.kind === "channel")) setTool("section");
+        return;
       case "a":
       case "A":
         if (boardRef.current?.isOwner && boardRef.current.kind === "user") setTool("arrow");
-        return;
-      case "l":
-      case "L":
-        if (sel.size) {
-          e.preventDefault();
-          setLabelOpen(true);
-        }
         return;
       case "s":
       case "S":
@@ -1203,7 +1246,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     const text = e.clipboardData.getData("text/plain");
     // some browsers drop the custom type; the plain text still tells us it was our own copy
     if (clipRef.current && text === clipRef.current.text) return pasteItems(clipRef.current.items);
-    if (text.trim()) pasteItems([{ text: text.trim(), color: newColor, visibility: "public", labels: filterLabels(), dx: 0, dy: 0 }]);
+    if (text.trim()) pasteItems([{ text: text.trim(), color: newColor, visibility: "public", dx: 0, dy: 0 }]);
   }
 
   const keyHandlers = useRef({ onKeyDown, onKeyUp, onCopy, onPaste });
@@ -1263,6 +1306,56 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     return true;
   }
 
+  const canSection = !!board && (board.isOwner || board.kind === "channel");
+  function startSecGesture(e: ReactPointerEvent, c: Section, mode: "secMove" | "secSize") {
+    if (!canSection || e.button !== 0) return;
+    e.stopPropagation();
+    viewportRef.current?.setPointerCapture(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const w = toWorld(e.clientX, e.clientY);
+    gestureRef.current = { mode, pointerId: e.pointerId, id: c.id, sx: w.x, sy: w.y, orig: c };
+  }
+
+  /** Draw a new zone: the client checks overlap first, and the server's 409 is the backstop. */
+  function createSection(n: { x0: number; y0: number; x1: number; y1: number }) {
+    const bid = boardRef.current?.id;
+    if (bid === undefined) return;
+    const rect = { x: Math.round(n.x0), y: Math.round(n.y0), w: Math.round(n.x1 - n.x0), h: Math.round(n.y1 - n.y0) };
+    if (rect.w < SEC_MIN_W || rect.h < SEC_MIN_H) return;
+    const probe: Section = { id: 0, boardId: bid, name: "", color: "", ...rect };
+    if (sectionsRef.current.some((o) => secOverlap(o, probe))) return alertSec("Sections can't overlap", null);
+    const color = SEC_COLORS[sectionsRef.current.length % SEC_COLORS.length];
+    api<{ section: Section }>("POST", `/api/boards/${bid}/sections`, { name: "Section", color, ...rect })
+      .then((r) => {
+        putSection(r.section);
+        setSecEdit(r.section.id);
+      })
+      .catch((err) => (err instanceof ApiError && err.status === 409 ? alertSec("Sections can't overlap", null) : flash(err instanceof ApiError ? err.message : "couldn't draw that section")));
+  }
+  function patchSection(id: number, change: Partial<Pick<Section, "name" | "x" | "y" | "w" | "h">>, before: Section) {
+    api<{ section: Section }>("PATCH", `/api/sections/${id}`, change)
+      .then((r) => putSection(r.section))
+      .catch((err) => {
+        putSection(before);
+        if (err instanceof ApiError && err.status === 409) alertSec("Sections can't overlap", id);
+        else flash(err instanceof ApiError ? err.message : "couldn't change that section");
+      });
+  }
+  function renameSection(c: Section, raw: string) {
+    const name = raw.trim().slice(0, SEC_NAME_MAX);
+    if (!name || name === c.name) return;
+    putSection({ ...c, name });
+    patchSection(c.id, { name }, c);
+  }
+  function removeSection(c: Section) {
+    dropSection(c.id);
+    api("DELETE", `/api/sections/${c.id}`).catch((err) => {
+      if (err instanceof ApiError && err.status === 404) return; // already gone
+      putSection(c);
+      flash(err instanceof ApiError ? err.message : "couldn't delete that section");
+    });
+  }
+
   const panning = (e: ReactPointerEvent) => e.pointerType === "touch" || e.button === 1 || toolRef.current === "hand" || toolRef.current === "arrow" || spaceRef.current;
 
   function onBackgroundDown(e: ReactPointerEvent, fromNote = false) {
@@ -1272,6 +1365,12 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     viewportRef.current?.setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (startPinchIfTwo()) return;
+    if (toolRef.current === "section" && !fromNote && e.pointerType !== "touch") {
+      const w = toWorld(e.clientX, e.clientY);
+      gestureRef.current = { mode: "section", pointerId: e.pointerId, x0: w.x, y0: w.y };
+      setSecDraft({ x0: w.x, y0: w.y, x1: w.x, y1: w.y });
+      return;
+    }
     if (fromNote || panning(e)) {
       const v = viewRef.current;
       gestureRef.current = { mode: "pan", pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, ox: v.ox, oy: v.oy, moved: false, fromNote };
@@ -1434,6 +1533,26 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
         }
         return;
       }
+      case "section": {
+        if (g.pointerId !== e.pointerId) return;
+        const w = toWorld(e.clientX, e.clientY);
+        setSecDraft({ x0: g.x0, y0: g.y0, x1: w.x, y1: w.y });
+        return;
+      }
+      case "secMove":
+      case "secSize": {
+        if (g.pointerId !== e.pointerId) return;
+        const w = toWorld(e.clientX, e.clientY);
+        const dx = w.x - g.sx, dy = w.y - g.sy;
+        setSections((list) =>
+          list.map((c) =>
+            c.id !== g.id ? c : g.mode === "secMove"
+              ? { ...c, x: Math.round(g.orig.x + dx), y: Math.round(g.orig.y + dy) }
+              : { ...c, w: Math.max(SEC_MIN_W, Math.round(g.orig.w + dx)), h: Math.max(SEC_MIN_H, Math.round(g.orig.h + dy)) },
+          ),
+        );
+        return;
+      }
       case "arrow": {
         if (g.pointerId !== e.pointerId) return;
         const w = toWorld(e.clientX, e.clientY);
@@ -1482,6 +1601,29 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
     if (("pointerId" in g && g.pointerId !== e.pointerId) || g.mode === "none") return;
     gestureRef.current = { mode: "none" };
     if (g.mode === "marquee") setMarquee(null);
+    if (g.mode === "section") {
+      setSecDraft(null);
+      const w = toWorld(e.clientX, e.clientY);
+      if (e.type === "pointerup") createSection(norm({ x0: g.x0, y0: g.y0, x1: w.x, y1: w.y }));
+      setTool("select");
+      return;
+    }
+    if (g.mode === "secMove" || g.mode === "secSize") {
+      const cur = sectionsRef.current.find((c) => c.id === g.id);
+      if (!cur) return;
+      const moved = cur.x !== g.orig.x || cur.y !== g.orig.y || cur.w !== g.orig.w || cur.h !== g.orig.h;
+      if (e.type !== "pointerup" || !moved) {
+        if (moved) putSection(g.orig);
+        return;
+      }
+      if (sectionsRef.current.some((o) => o.id !== cur.id && secOverlap(o, cur))) {
+        putSection(g.orig); // snap back, and say so loudly
+        alertSec("Sections can't overlap", g.id);
+        return;
+      }
+      patchSection(g.id, { x: cur.x, y: cur.y, w: cur.w, h: cur.h }, g.orig);
+      return;
+    }
     if (g.mode === "arrow") {
       const d = draftRef.current;
       setDraftArrow(null);
@@ -1569,7 +1711,7 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
       height: el?.clientHeight ?? window.innerHeight,
       me: me.username,
     };
-  }, [notes, filter, view, me.username, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [notes, filter, sections, view, me.username, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------- render
 
@@ -1635,17 +1777,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
   const title = !board ? "" : board.kind === "channel" ? `#${board.slug}` : boardTitle(board);
   const others = peers.filter((p) => p.sid !== mySid);
   const followed = following ? peers.find((p) => p.sid === following) : undefined;
-  // every label on the board, as first written, with how many notes carry it
-  const labelMap = new Map<string, { label: string; count: number }>();
-  for (const n of sorted)
-    for (const l of n.labels) {
-      const e = labelMap.get(l.toLowerCase());
-      if (e) e.count++;
-      else labelMap.set(l.toLowerCase(), { label: l, count: 1 });
-    }
-  const boardLabels = [...labelMap.values()].sort((a, b) => a.label.localeCompare(b.label));
   const hiddenCount = filter.size ? sorted.filter((n) => !shown(n)).length : 0;
-  const filterName = filter.size === 1 ? (labelMap.get([...filter][0])?.label ?? [...filter][0]) : `${filter.size} labels`;
+  const filterName = filter.size === 1 ? (sections.find((c) => String(c.id) === [...filter][0])?.name ?? "1 section") : `${filter.size} sections`;
   const grid = 24 * view.s;
   const selColor = arrowSel !== null ? (arrows.find((a) => a.id === arrowSel)?.color ?? notes[arrows.find((a) => a.id === arrowSel)?.from ?? -1]?.color ?? null) : selNotes.length && selNotes.every((n) => n.color === selNotes[0].color) ? selNotes[0].color : selNotes.length ? null : newColor;
   const groupBox =
@@ -1694,10 +1827,15 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
 
   return (
     <div className="board-page">
+      {secAlert && (
+        <div key={secAlert.n} className="sec-toast" role="alert">
+          {secAlert.msg}
+        </div>
+      )}
       <div className="board-body">
         <div
           ref={viewportRef}
-          className={`viewport${grabbing ? " panning" : ""}${tool === "arrow" ? " arrowing" : ""}`}
+          className={`viewport${grabbing ? " panning" : ""}${tool === "arrow" ? " arrowing" : ""}${tool === "section" ? " sectioning" : ""}`}
           tabIndex={0}
           role="application"
           aria-label={`${title}: infinite canvas. Arrow keys pan, plus and minus zoom, N adds a note, Tab moves between notes, question mark lists shortcuts.`}
@@ -1710,6 +1848,59 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           onDoubleClick={onBackgroundDoubleClick}
         >
           <div className="world" style={{ transform: `translate(${view.ox}px, ${view.oy}px) scale(${view.s})` }}>
+            {sections.map((c) => {
+              const tint = SEC_TINTS[c.color] ?? SEC_TINTS.yellow;
+              const lit = filter.has(String(c.id));
+              return (
+                <div
+                  key={c.id}
+                  className={`section${lit ? " lit" : ""}`}
+                  data-section={c.id}
+                  style={{ left: c.x, top: c.y, width: c.w, height: c.h, background: `color-mix(in srgb, ${tint} 28%, transparent)`, borderColor: `color-mix(in srgb, ${tint} 90%, #555)` }}
+                >
+                  {secAlert?.id === c.id && <div key={secAlert.n} className="section-flash" />}
+                  <div
+                    className={`section-name${canSection ? " movable" : ""}`}
+                    style={{ background: `color-mix(in srgb, ${tint} 70%, white)` }}
+                    onPointerDown={(e) => startSecGesture(e, c, "secMove")}
+                    onDoubleClick={() => canSection && setSecEdit(c.id)}
+                  >
+                    {secEdit === c.id ? (
+                      <input
+                        autoFocus
+                        defaultValue={c.name}
+                        maxLength={SEC_NAME_MAX}
+                        aria-label="Section name"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={(e) => {
+                          if (!secCancel.current) renameSection(c, e.target.value);
+                          secCancel.current = false;
+                          setSecEdit(null);
+                        }}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === "Escape") secCancel.current = true;
+                          if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur();
+                        }}
+                      />
+                    ) : (
+                      <span className="section-title">{c.name}</span>
+                    )}
+                    {canSection && secEdit !== c.id && (
+                      <button className="section-x" title="Delete the section (its notes stay)" aria-label={`Delete section ${c.name}`} onPointerDown={(e) => e.stopPropagation()} onClick={() => removeSection(c)}>
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  {canSection && <div className="section-grip" onPointerDown={(e) => startSecGesture(e, c, "secSize")} />}
+                </div>
+              );
+            })}
+            {secDraft && (() => {
+              const n = norm(secDraft);
+              return <div className="section draft" style={{ left: n.x0, top: n.y0, width: n.x1 - n.x0, height: n.y1 - n.y0 }} />;
+            })()}
             <svg className="arrow-layer" width="1" height="1" overflow="visible">
               {arrows.map((a) => {
                 const geom = arrowGeom(a);
@@ -1801,8 +1992,8 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
           )}
           {sorted.length > 0 && hiddenCount === sorted.length && (
             <div className="empty-hint">
-              <p className="empty-title">No notes labelled {filterName}</p>
-              <p>New notes you add now get that label.</p>
+              <p className="empty-title">No notes in {filterName}</p>
+              <p>New notes you add now land inside it.</p>
             </div>
           )}
         </div>
@@ -1876,16 +2067,16 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
             className={`island tool filter-button${filter.size ? " on" : ""}`}
             aria-expanded={filterOpen}
             onClick={() => setFilterOpen((o) => !o)}
-            title="Show only notes with certain labels"
+            title="Show only notes in certain sections"
           >
             <svg viewBox="0 0 20 20" aria-hidden>
               <path d="M3.5 5h13l-5 6v4.5l-3 1.5V11Z" />
             </svg>
-            <span>{filter.size ? filterName : "Labels"}</span>
+            <span>{filter.size ? filterName : "Sections"}</span>
           </button>
           {filterOpen && (
             <FilterPop
-              labels={boardLabels}
+              sections={sections.map((c) => ({ id: String(c.id), name: c.name, color: c.color, count: sorted.filter((n) => secOf(n)?.id === c.id).length }))}
               filter={filter}
               hidden={hiddenCount}
               onChange={(f) => setFilter(f)}
@@ -1953,6 +2144,14 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
             <span className="sr-only">Arrow</span>
           </button>
         )}
+        {canSection && (
+          <button className={`tool${tool === "section" ? " on" : ""}`} aria-pressed={tool === "section"} onClick={() => setTool("section")} title="Section: drag a rectangle, then name it (G)">
+            <svg viewBox="0 0 20 20" aria-hidden>
+              <path d="M3.5 5.5h13v10h-13ZM3.5 8.5h5" strokeDasharray="2 1.5" />
+            </svg>
+            <span className="sr-only">Section</span>
+          </button>
+        )}
         <span className="tool-sep" aria-hidden />
         <button className="tool add" onClick={createAtCentre} title="Add a note (N)">
           <svg viewBox="0 0 20 20" aria-hidden>
@@ -1985,11 +2184,6 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
             </button>
           )}
           {selNotes.some((n) => n.canEdit) && (
-            <button className={`quiet${labelOpen ? " on" : ""}`} aria-expanded={labelOpen} onClick={() => setLabelOpen((o) => !o)} title="Label (L)">
-              Label
-            </button>
-          )}
-          {selNotes.some((n) => n.canEdit) && (
             <button className="quiet" onClick={(e) => shiftStatus(e.shiftKey ? -1 : 1)} title="Move status forward (S); Shift-click or Shift S goes back">
               Status
             </button>
@@ -2002,7 +2196,6 @@ export function BoardPage({ kind, slug }: { kind: "user" | "channel"; slug: stri
               Delete
             </button>
           )}
-          {labelOpen && <LabelPop notes={selNotes} labels={boardLabels} onApply={applyLabel} onClose={() => setLabelOpen(false)} />}
         </div>
       )}
 
@@ -2062,7 +2255,7 @@ const SHORTCUTS: [string, string][] = [
   ["Select all", `${mod} A`],
   ["Copy, cut, paste", `${mod} C, ${mod} X, ${mod} V`],
   ["Duplicate", `${mod} D`],
-  ["Label the selection", "L"],
+  ["Draw a section (a named zone)", "G, then drag"],
   ["Status forward / back", "S, Shift S"],
   ["Follow someone", "Click their avatar, top right (Esc stops)"],
   ["Delete", "Delete or Backspace"],
@@ -2109,32 +2302,33 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ---------------------------------------------------------------- labels
+// ---------------------------------------------------------------- section filter
 
-type LabelCount = { label: string; count: number };
+type SectionCount = { id: string; name: string; color: string; count: number };
 
-function FilterPop(props: { labels: LabelCount[]; filter: Set<string>; hidden: number; onChange: (f: Set<string>) => void; onClose: () => void }) {
-  const { labels, filter } = props;
-  const toggle = (l: string) => {
+function FilterPop(props: { sections: SectionCount[]; filter: Set<string>; hidden: number; onChange: (f: Set<string>) => void; onClose: () => void }) {
+  const { sections, filter } = props;
+  const toggle = (id: string) => {
     const next = new Set(filter);
-    if (next.has(l.toLowerCase())) next.delete(l.toLowerCase());
-    else next.add(l.toLowerCase());
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
     props.onChange(next);
   };
   return (
     <>
       <div className="menu-backdrop" onPointerDown={props.onClose} />
-      <div className="island menu-pop label-pop" role="dialog" aria-label="Filter by label" onKeyDown={(e) => e.key === "Escape" && props.onClose()}>
-        {labels.length === 0 ? (
-          <p className="pop-note">No labels yet. Select a note and press L to give it one.</p>
+      <div className="island menu-pop label-pop" role="dialog" aria-label="Filter by section" onKeyDown={(e) => e.key === "Escape" && props.onClose()}>
+        {sections.length === 0 ? (
+          <p className="pop-note">No sections yet. Pick the Section tool (G) and drag a rectangle.</p>
         ) : (
           <>
-            <p className="pop-note">Show only notes labelled</p>
+            <p className="pop-note">Show only notes in</p>
             <div className="label-list">
-              {labels.map(({ label, count }, i) => (
-                <label key={label} className="label-row">
-                  <input type="checkbox" checked={filter.has(label.toLowerCase())} onChange={() => toggle(label)} autoFocus={i === 0} />
-                  <span className="chip">{label}</span>
+              {sections.map(({ id, name, color, count }, i) => (
+                <label key={id} className="label-row">
+                  <input type="checkbox" checked={filter.has(id)} onChange={() => toggle(id)} autoFocus={i === 0} />
+                  <span className="sec-dot" style={{ background: SEC_TINTS[color] ?? SEC_TINTS.yellow }} aria-hidden />
+                  <span className="sec-row-name">{name}</span>
                   <span className="label-count">{count}</span>
                 </label>
               ))}
@@ -2149,67 +2343,6 @@ function FilterPop(props: { labels: LabelCount[]; filter: Set<string>; hidden: n
             </button>
           </div>
         )}
-      </div>
-    </>
-  );
-}
-
-function LabelPop(props: { notes: Note[]; labels: LabelCount[]; onApply: (label: string, add: boolean) => void; onClose: () => void }) {
-  const [draft, setDraft] = useState("");
-  const editable = props.notes.filter((n) => n.canEdit);
-  /** On all, some or none of the selected notes. */
-  const state = (label: string) => {
-    const k = label.toLowerCase();
-    const c = editable.filter((n) => n.labels.some((l) => l.toLowerCase() === k)).length;
-    return c === 0 ? "none" : c === editable.length ? "all" : "some";
-  };
-  const query = draft.trim().toLowerCase();
-  const options = props.labels.filter((l) => !query || l.label.toLowerCase().includes(query));
-  const exact = props.labels.some((l) => l.label.toLowerCase() === query);
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!draft.trim()) return;
-    props.onApply(draft, true);
-    setDraft("");
-  }
-  return (
-    <>
-      <div className="menu-backdrop" onPointerDown={props.onClose} />
-      <div className="island menu-pop label-pop above" role="dialog" aria-label="Labels" onKeyDown={(e) => e.key === "Escape" && props.onClose()}>
-        <form onSubmit={submit}>
-          <input
-            autoFocus
-            value={draft}
-            maxLength={LABEL_MAX}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={props.labels.length ? "Find or add a label" : "Add a label"}
-            aria-label="Label"
-          />
-        </form>
-        <div className="label-list">
-          {options.map(({ label }) => {
-            const st = state(label);
-            return (
-              <label key={label} className="label-row">
-                <input
-                  type="checkbox"
-                  checked={st === "all"}
-                  ref={(el) => {
-                    if (el) el.indeterminate = st === "some";
-                  }}
-                  onChange={() => props.onApply(label, st !== "all")}
-                />
-                <span className="chip">{label}</span>
-              </label>
-            );
-          })}
-          {query && !exact && (
-            <button type="button" className="label-add" onClick={() => (props.onApply(draft, true), setDraft(""))}>
-              Add “{draft.trim()}”
-            </button>
-          )}
-        </div>
-        {editable.length < props.notes.length && <p className="pop-note">Only your own notes get labels here.</p>}
       </div>
     </>
   );
@@ -2252,7 +2385,7 @@ function NoteCard(props: {
 
   const heldByOther = lock && !lock.mine;
   const isPrivate = note.visibility === "private";
-  const label = `Note${props.showAuthor ? ` by ${note.author}` : ""}${isPrivate ? ", private" : ""}, ${STATUS_NAMES[note.status]}${note.labels.length ? `, labelled ${note.labels.join(", ")}` : ""}: ${note.text || "empty"}`;
+  const label = `Note${props.showAuthor ? ` by ${note.author}` : ""}${isPrivate ? ", private" : ""}, ${STATUS_NAMES[note.status]}: ${note.text || "empty"}`;
   return (
     <div
       data-note={note.id}
@@ -2312,13 +2445,6 @@ function NoteCard(props: {
         <span className="status" aria-hidden="true">
           <span className="glyph">{STATUS_GLYPHS[note.status]}</span>
           {STATUS_NAMES[note.status]}
-        </span>
-        <span className="chips">
-          {note.labels.map((l) => (
-            <span key={l} className="chip">
-              {l}
-            </span>
-          ))}
         </span>
         <span className="meta">
           {props.showAuthor && <span className="author">{note.author}</span>}
