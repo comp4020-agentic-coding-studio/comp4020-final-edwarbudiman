@@ -1,9 +1,6 @@
 # Process overview
 
-<!-- DRAFT: rewrite in your own words before the crit 8 cutoff, then delete
-     this comment. -->
-
-## Choosing the topic
+## The topic
 
 I wanted a place for the messages and to-do lists that end up scattered and
 cluttered: a post-it board, like FigJam, where you put notes wherever you like
@@ -11,120 +8,121 @@ and their position is how you prioritise and group them. What makes it
 multi-user is that other people can come to your board and leave you a note,
 and being there with them at the same time makes it feel less lonely.
 
-## Starting the project with DeepSeek Harness
+## My setup: Herdr and Claude Code
 
-I spun the project off in DeepSeek Harness, with the COMP4020 course skills
-loaded into it. Before discussing ideas, I had the agent pull the
-final-project brief, the specs for crits 8–10 and my group's cutoffs from the
-course site, and read the fixed parts of the repo (`fly.toml`, the
-`Dockerfile`, the shipped `spec/` checks). That grounded everything after it
-in the course's actual constraints rather than the agent's memory, and it
-caught an early mistake: with no crit group set, the crit 8 deadline showed as
-already past. Once I set my group, the real cutoff was the next morning.
+My setup for this project is Herdr and Claude Code. Herdr gives me
+workspaces and tabs, and each tab runs its own Claude Code session. That is
+the setup I already worked in, and it is the one I came back to.
 
-## Using the agent to measure and decide
+I did try DeepSeek Harness first, mostly because I was curious what it feels
+like. I set it up properly: I loaded the COMP4020 course skills into it
+([`6672660`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/6672660))
+and pointed it at my Claude Code skills, so it could understand the same
+setup I already had. It planned a backlog
+([`a0ca454`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/a0ca454))
+and built a first version that passed the checks.
 
-I treated the agent as something to argue with rather than something to hand
-the build to:
+But after using it for a little while, I still felt more at home in Herdr and
+Claude Code. It also took the backlog too literally (a dashboard of users and
+a "paper" look) when what I wanted was simpler: open the app and you are on
+your own board, like Excalidraw. So I went back to Claude Code, told it to
+forget the old design, and refined the core with it: a white, minimal look,
+your own board at `/`, then selection, copy and paste, labels and live
+cursors. The personal board was done at
+[`957d95c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/957d95c).
 
-- **It challenged the idea first.** It pointed out that, as I first listed it
-  (accounts, boards, channels, chat), the app was close to the brief's "median
-  answer", so I had to tie each feature to a reason or drop it.
-- **It measured the options against the constraints.** For the database it
-  compared six options against one 256 MB machine and one volume, and it ran
-  `node:sqlite` on my local Node 24 to check that it works, finding the
-  experimental warning as a cost. For real-time it weighed WebSockets, SSE
-  and polling against what the app needs (live cursors mean frequent messages
-  from every client).
-- **I made the calls.** The agent asked structured questions with a
-  recommended option, and I didn't always take it: I chose an infinite canvas
-  over the recommended fixed board, and React over plain TypeScript.
+The tool was not the problem. I simply worked better in the setup that
+already felt like mine.
 
-The result is Node 24 and TypeScript on the server, React and Vite on the
-client, SQLite through `node:sqlite` on the Fly volume, and WebSockets for
-real-time.
+## Building my own pipeline
 
-## How the app will be built
+Before I had a pipeline, I tried a lot of other people's ways of working. I
+used Matt Pocock's skills, like grilling, where the agent questions you hard
+on a plan. I tried to understand Lauren Tan's poteto agents and pstack. I
+browsed many other skills that people shared on X. Each one is one command
+to install, and many of them are good. But none of them felt like mine. They
+stayed on my computer, and almost none of them got into a pull request.
 
-The planning session only produced a backlog
-([`a0ca454`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/a0ca454)).
-It records the decisions, the smallest schema, and the tasks cut into
-checkpoints that can each be shipped. Each task is marked as mine or the
-agent's, and the README, this file and the reflections are mine. Building
-happens in a fresh session that starts from that backlog, so the plan, not a
-long chat, is the handoff between sessions.
+What finally clicked was writing the skills myself. I sat down, kept the
+parts of those skills that worked for me, and turned them into my own
+pipeline for this assignment
+([`9659d7f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/9659d7f)).
+After that, things just worked.
 
-## Switching to Claude Code for the build
+How it works:
 
-DeepSeek Harness spun the backlog off into a first working version: a server,
-a client, and the spec checks passing. But it wasn't getting at what I
-wanted. It built the backlog faithfully, including a dashboard of users and
-a warm "paper" look, when what I actually had in mind was simpler: open the
-app and you're on your own board, like Excalidraw, with nothing in the way.
+- **One idea, one place.** Each idea gets its own git worktree
+  (`feat/<idea>`) and its own Herdr workspace, with its own ports, so several
+  ideas can run side by side without touching `main`.
+- **Roles as tabs.** Inside the workspace, each role is a tab with its own
+  Claude session: lead, researcher, decider, spiker, builder and reviewer.
+  Each role is a plain markdown file in
+  `.claude/skills/orchestrate-postits/roles/`, and the scripts that start and
+  watch them are in `scripts/orch/`.
+- **Handoff by files.** Roles pass work through files, not chat: `idea.md`,
+  `research.md`, `decision.md`, `brief.md`, then reports.
+- **I judge, they build.** The spiker makes a throwaway version, I try it in
+  the browser, and I run `/taste`. My reactions go into `docs/taste.md`,
+  which every role reads
+  ([`963d2fc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/963d2fc)).
+  Only I merge into `main`, for example the note sidebar
+  ([`0167ee3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/0167ee3)).
 
-So I spun up Claude Code with Opus and used it to give feedback on what I
-wanted, rather than handing it the backlog again. I told it to forget the
-pre-made design and refine the core first:
+The other people's skills did not disappear. They became parts of my
+pipeline: pstack's per-role model settings decide which model each role uses,
+and Matt Pocock's `/retro` now runs at the end of every idea.
 
-- **The look.** White and minimal, like Excalidraw. It asked me first
-  whether I wanted the hand-drawn style or a clean one; I chose clean for now,
-  with the note styles and font kept as tokens so I can change them later.
-- **The flow.** No dashboard: after log-in you're on your own board at `/`,
-  showing only your notes; other people's boards are at `/<username>`.
-- **The interactions.** Select notes (one, or several with a box or
-  Shift-click), copy and paste them, double-click to edit in place. Then
-  labels with a filter, and other people's live cursors with avatars you can
-  click to follow.
+## What came out of it
 
-Before building, it asked me the questions that changed what it would do
-(multi-select or single, what "focus" on double-click means, which visual
-style), and it pushed back where it disagreed: it argued against putting the
-saved-boards navigation on the right before we settle where chat and
-presence go, so that part is still being discussed. It tested in the browser
-as it went and caught two real bugs I would have hit (double-clicking a note
-created a new one on top of it; typing straight after creating a note lost
-the first letters). I then checked everything by hand.
+Some of what the board does now:
 
-The personal board is done for this checkpoint
-([`957d95c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/957d95c)),
-and so far it's all good.
+- **Live cursors.** Other people on your board show up as cursors with
+  avatars, so you can see who is there with you
+  ([`957d95c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/957d95c)).
+- **Channels.** A sidebar of channels with unread counts, for talking around
+  the board
+  ([`19926ac`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/19926ac)).
+- **Note sidebar.** Each note has a back side where you can show proof that
+  it is done, say you are on it, and comment on it. It was the first feature
+  to go through the whole pipeline and arrive as a pull request
+  ([`0167ee3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/0167ee3)).
 
-## Creating a pipeline for Claude so it can manage multiple roles and build features
+## Documentation as part of shipping
 
-<!-- HINT: notes for you to write this section in your own words, then
-     delete this comment. Points to cover:
+I also wanted each feature to explain itself, so I added a docs site at
+`/docs/`
+([`d162918`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/d162918)).
+It lists every feature with how to use it and a demo, plus pages for the
+pipeline, the roles and the skills. It is plain Markdown served by the app,
+so there is no build step and no extra service on the small Fly machine, and
+`pnpm check:docs` fails if a merged feature has no docs page.
 
-- Why: one long chat per feature mixed research, design, and code, and
-  lost context. I wanted several ideas moving in parallel, each with a
-  clear owner, and me only stepping in to judge.
-- The shape: one idea = one git worktree (`feat/<idea>`) + one Herdr
-  workspace. Each role is a tab running its own Claude session:
-  lead (the idea's orchestrator) → researcher → decider → spiker (a
-  throwaway `spike/<idea>` branch, never merged) → builder → reviewer.
-  Roles are plain markdown files in
-  `.claude/skills/orchestrate-postits/roles/`; the scripts that start and
-  watch them are in `scripts/orch/` (`new-idea.sh`, `spawn.sh`, `wait.sh`,
-  `status.sh`, `resume.sh`, `retire.sh`).
-- Handoff is files, not chat: idea.md → research.md → decision.md →
-  brief.md → reports. Each report starts with a per-round token so a
-  stale report from an earlier round is never read as the new one.
-- I stay in the loop at "taste gates": I try each spike in the browser
-  and run `/taste`, and my reactions go in `docs/taste.md`, which every role reads.
-  Small fixes I type straight into the spiker's tab ("## Tweaks").
-  Only I merge into `main`.
-- Each idea gets its own ports, so spikes and builds run side by side
-  without clashing with main (8080/5173).
-- Dry run on note-arrows: research ~7 min, decide ~21 min, then three
-  spikes. The spikes changed the decision (four-sided nub, magnetic
-  movable ends, two lines for A↔B, arrow colour), so for small UI ideas
-  the spike taught more than the research. Proposed change: size each idea
-  first, and give small ideas a lighter research and decide stage.
-- Something that broke: Herdr doesn't bring agents back after a
-  restart, so all the workers silently went "gone" mid-build. Fix:
-  `spawn.sh` now pins each Claude session id, and `resume.sh` reopens a
-  worker with its whole conversation, keeping the same round and report.
-  The lead can resume any of its own roles, so after a restart I only
-  resume the leads and they bring back their workers.
-- What to reflect on: is this overkill for one person? Where did it save
-  me time and where did it cost me time? What did the taste gates catch that tests didn't?
--->
+Later I made documentation its own role
+([`8475d44`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/8475d44)).
+After the reviewer approves, the lead spawns a documenter. It follows the
+feature's steps in the real app, writes the page with a demo, and commits it
+on the feature branch, so the docs land in the same merge as the feature.
+
+## The pipeline keeps changing
+
+Because the skills are mine, I can fix them when they break:
+
+- **Agents could not find Node.** Node and pnpm are pinned by mise, so every
+  role now uses `mise exec`
+  ([`a7eb841`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/a7eb841)).
+- **Workers stopped after a Herdr restart.** `spawn.sh` now keeps each
+  session id, so a lead can bring its workers back with their full
+  conversation
+  ([`6fc7174`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/6fc7174)).
+- **Small ideas did not need much research.** On note-arrows, three spikes
+  changed the decision more than the research did
+  ([`789e166`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/789e166)).
+- **Reflection looked at the code, not the setup.** The reflect stage now
+  runs `/retro` first, so each idea ends by asking what in the environment
+  got in the way
+  ([`4305727`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman/commit/4305727)).
+  That retro is what steers the next session.
+
+For one person it is a heavy setup. But it is mine, it fits how I think, and
+every idea now passes a spike, my taste and a review before it reaches
+`main`.

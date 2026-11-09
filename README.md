@@ -45,5 +45,18 @@ From here on, each feature is built by Claude Code agents running side by side
 in [Herdr](https://herdr.dev). I set the direction with one orchestrating
 session. Each feature then gets its own git worktree, a builder agent, and a
 separate reviewer agent that runs the tests and uses the real app in a
-browser. I try every feature myself before I merge it. The details are in
-[`docs/orchestration/README.md`](docs/orchestration/README.md).
+browser. I try every feature myself before I merge it, and save my reaction
+with `/taste` so the next spike starts from it.
+
+This workflow is part of what good means here. Before it, I tried many new
+skill sets and new ideas from posts on X. They stayed on my computer, and
+almost none of them got to a pull request. Now each idea goes through a
+spike, my `/taste` judgement and a review before it goes into `main`. This
+shows me which ideas to keep and which to discard.
+
+The workflow has more parts than this page can show: the agent roles, the skills each
+one loads, the pipeline stages, and a page per feature showing how it was
+spiked, judged and built. They're all on the [docs page](/docs/), which the
+app serves next to this one. The source is in
+[`docs/orchestration/README.md`](docs/orchestration/README.md) and
+[`docs/site/`](docs/site/).

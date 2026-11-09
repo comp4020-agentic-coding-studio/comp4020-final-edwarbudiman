@@ -7,7 +7,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { User } from "./auth.ts";
 import { getUser, sessionUser } from "./auth.ts";
 import type { ArrowRow, Board, NoteRow } from "./boards.ts";
-import { arrowOut, arrowsOfNote, canEnter, canSeeArrow, canMove, canSee, getBoard, getNote, hooks, markSeen, noteOut, noteSummary } from "./boards.ts";
+import { arrowOut, arrowsOfNote, canEnter, canSeeArrow, canMove, canSee, getBoard, getNote, hooks, markSeen, noteOut, noteSummary, sectionOut } from "./boards.ts";
 import { config } from "./config.ts";
 import type { DB } from "./db.ts";
 import { sameOrigin } from "./http.ts";
@@ -461,6 +461,13 @@ export function attachRealtime(server: Server, database: DB): void {
   hooks.noteArrowsChanged = (board, note) => {
     const arrows = arrowsOfNote(db, note.id);
     for (const c of rooms.get(board.id) ?? []) for (const a of arrows) arrowTo(c, board, a);
+  };
+  // Sections are visible to everyone in the room.
+  hooks.sectionUpserted = (board, section) => {
+    for (const c of rooms.get(board.id) ?? []) send(c, { type: "section:upsert", section: sectionOut(section) });
+  };
+  hooks.sectionDeleted = (board, section) => {
+    for (const c of rooms.get(board.id) ?? []) send(c, { type: "section:delete", id: section.id });
   };
   hooks.lockHolder = (noteId) => locks.get(noteId)?.userId ?? null;
 }

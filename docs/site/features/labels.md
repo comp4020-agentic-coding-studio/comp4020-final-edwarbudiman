@@ -1,21 +1,20 @@
 ---
 title: Labels and filter
 order: 3
-summary: Tag notes with labels, then show only the ones you care about right now.
+summary: Replaced by sections. Notes no longer carry labels; you group them by drawing a zone instead.
 image: feature-labels.webp
 ---
 
 # Labels and filter
 
-Position groups notes on the board. Labels group them across the board, for example "groceries" notes sitting in three different corners.
+Notes used to carry labels, with an **L** key and a label filter. I took them off the notes: the note face was getting crowded, and where a note sits already says what group it is in. Sections replaced them.
 
 ## How to use it
 
-1. Select a note and press **L** (or the label button in its bar).
-2. Pick an existing label, or type a new one and press **Enter**.
-3. Open **Filter by label** in the toolbar and tick the labels you want. Every other note fades out of view.
-4. Untick everything (or press **Shift+1**) to see the whole board again.
+1. Draw a named zone with the Section tool (**G**), as described on the [Sections](/docs/features/sections/) page.
+2. Click **Sections** in the toolbar to show only the notes inside the zones you tick.
 
 ## Good to know
 
-Filtering only changes your view. Other people on the board still see every note.
+- There is no Label button, no Labels dialog and no **L** key any more.
+- Labels that notes already had are kept in the database but never shown, and they were not converted into sections.

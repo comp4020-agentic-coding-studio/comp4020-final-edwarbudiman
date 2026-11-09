@@ -81,7 +81,7 @@ A merged idea with no page fails `pnpm check:docs` on `main` (it reads Done in `
 
 ### Reflect (stage 6)
 
-After a merge or a rejection, run pstack `reflect` over this session, or do it by hand: what slowed us down, which instruction a worker got wrong, and which owner correction came up twice. Turn each into an edit to a role file, the brief template, or a script check (a repeated correction belongs in a script, not in more text). Add rejected shapes to `docs/rejected.md`. Write a short entry under `## Reflections` in `state.md`.
+After a merge or a rejection, run Matt Pocock's `/retro` in the idea's lead session first: it audits the environment (could the agent find the right files, would a check have caught its mistake, which `CLAUDE.md` lines changed nothing) rather than the code. Then run pstack `reflect` over this session, or do it by hand: what slowed us down, which instruction a worker got wrong, and which owner correction came up twice. Turn each into an edit to a role file, the brief template, or a script check (a repeated correction belongs in a script, not in more text). Add rejected shapes to `docs/rejected.md`. Write a short entry under `## Reflections` in `state.md`.
 
 ## What reaches the owner
 
