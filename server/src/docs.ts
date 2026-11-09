@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { basename, extname, join } from "node:path";
 import { Marked } from "marked";
 import { config } from "./config.ts";
+import { notFound } from "./discovery.ts";
 
 /**
  * /docs/: what each feature does and how to use it, plus how the app is built
@@ -355,10 +356,6 @@ async function sendStatic(res: ServerResponse, file: string, type: string): Prom
   }
 }
 
-function notFound(res: ServerResponse): void {
-  res.writeHead(404, { "content-type": "text/plain" });
-  res.end("not found");
-}
 
 function redirect(res: ServerResponse, location: string): void {
   res.writeHead(301, { location });
@@ -401,17 +398,17 @@ export async function currentDocsMarkdown(): Promise<Map<string, string>> {
   return out;
 }
 
-export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+export async function serveDocs(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (path === "/docs") return redirect(res, "/docs/");
   if (path === "/docs/infima.css") {
-    if (!(await sendStatic(res, join(SITE(), "infima.min.css"), "text/css; charset=utf-8"))) notFound(res);
+    if (!(await sendStatic(res, join(SITE(), "infima.min.css"), "text/css; charset=utf-8"))) notFound(req, res);
     return;
   }
   // images and videos from docs/readme-assets/: plain names, one optional sub-folder
   const asset = path.match(/^\/docs\/assets\/((?:[\w-]+\/)?[\w-][\w.-]*)$/);
   if (asset) {
     const type = ASSET_TYPES[extname(asset[1]).toLowerCase()];
-    if (!type || !(await sendStatic(res, join(ASSETS(), asset[1]), type))) notFound(res);
+    if (!type || !(await sendStatic(res, join(ASSETS(), asset[1]), type))) notFound(req, res);
     return;
   }
 
@@ -426,7 +423,7 @@ export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path
   }
   if (rest && !rest.endsWith("/")) return redirect(res, `${path}/`);
   const parts = rest.split("/").filter(Boolean);
-  if (parts.length > 2 || parts.some((p) => !/^[\w-]+$/.test(p))) return notFound(res);
+  if (parts.length > 2 || parts.some((p) => !/^[\w-]+$/.test(p))) return notFound(req, res);
 
   const prefix = base(versions, version);
   const dir = versionDir(versions, version);
@@ -460,7 +457,7 @@ export async function serveDocs(_req: IncomingMessage, res: ServerResponse, path
   } else if (parts.length === 1) {
     page = general.find((p) => p.slug === parts[0] && p.slug !== "index");
   }
-  if (!page) return notFound(res);
+  if (!page) return notFound(req, res);
 
   const current = page.slug === "versions" ? `${prefix}versions/` : hrefIn(prefix, page);
   const pathInVersion = current.slice(prefix.length);

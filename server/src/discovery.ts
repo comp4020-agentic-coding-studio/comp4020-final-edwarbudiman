@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
+import { marked } from "marked";
 import { config } from "./config.ts";
 import { currentDocsMarkdown, docsMarkdownUrl } from "./docs.ts";
 import { underPrefix } from "./routes.ts";
@@ -24,8 +25,37 @@ function send(req: IncomingMessage, res: ServerResponse, status: number, type: s
 const sendMarkdown = (req: IncomingMessage, res: ServerResponse, body: string, extra: Record<string, string> = {}): void =>
   send(req, res, 200, MD, body, { vary: "Accept", "cache-control": "no-cache", ...extra });
 
+const requestPath = (req: IncomingMessage): string => new URL(req.url ?? "/", "http://x").pathname;
+
+/**
+ * The one 404 for everything that isn't the app shell: `/.well-known/*`,
+ * unknown files, /readme/x, /docs/x/, unknown .md twins and non-GET requests to
+ * a path that doesn't exist. Markdown for a client that prefers it (with the
+ * links an agent needs next), plain text otherwise. `Vary: Accept` either way,
+ * since the body depends on it. The shell's own 404 is in static.ts and uses
+ * `notFoundMarkdown` / `NOT_FOUND_VARY` from here.
+ */
 export function notFound(req: IncomingMessage, res: ServerResponse): void {
-  send(req, res, 404, "text/plain; charset=utf-8", "not found");
+  if (prefersMarkdown(req.headers.accept)) return notFoundMarkdown(req, res);
+  send(req, res, 404, "text/plain; charset=utf-8", "not found", { vary: "Accept" });
+}
+
+/** The Markdown 404: says nothing is here and where the docs, sitemap and home page are. */
+export function notFoundMarkdown(req: IncomingMessage, res: ServerResponse): void {
+  const shown = requestPath(req).replace(/[`\r\n]/g, "");
+  const body = [
+    "# Not found",
+    "",
+    `Nothing is at \`${shown}\` on Post-its: no board, page or file by that name.`,
+    "",
+    "Where to go next:",
+    "",
+    `- [Docs](${ORIGIN}/docs/): what each feature does and how the app is built`,
+    `- [Sitemap](${ORIGIN}/sitemap.xml): every public page, as a list`,
+    `- [Home, as Markdown](${ORIGIN}/index.md): what Post-its is`,
+    "",
+  ].join("\n");
+  send(req, res, 404, MD, body, { vary: "Accept", "cache-control": "no-cache" });
 }
 
 // ---------------------------------------------------------------- Accept
@@ -60,21 +90,87 @@ export const linkAlternate = (mdUrl: string): string => `<${mdUrl}>; rel="altern
 
 // ---------------------------------------------------------------- the HTML shell's head
 
-const HEAD_TAGS = (): string => {
-  const title = "Post-its";
-  const description = "A board for your notes. Put them wherever you like: where a note sits is how you prioritise and group it. Visit other boards and see who's there.";
-  return [
-    `<meta name="description" content="${escapeXml(description)}" />`,
-    `<link rel="canonical" href="${escapeXml(ORIGIN)}/" />`,
-    `<meta property="og:title" content="${escapeXml(title)}" />`,
-    `<meta property="og:description" content="${escapeXml(description)}" />`,
+const TITLE = "Post-its";
+const DESCRIPTION = "A board for your notes. Put them wherever you like: where a note sits is how you prioritise and group it. Visit other boards and see who's there.";
+const KEYWORDS = "notes, post-its, sticky notes, board, productivity, to-do";
+// hero.webp is on an existing route (serveReadme's image passthrough); its real size is 1200x525
+const IMAGE = { url: `${ORIGIN}/readme/docs/readme-assets/hero.webp`, width: 1200, height: 525, type: "image/webp", alt: "A Post-its board: notes placed freely, grouped by where they sit" };
+// the repo is public (gh repo view --json visibility); drop this if that changes
+const REPO_URL = "https://github.com/comp4020-agentic-coding-studio/comp4020-final-edwarbudiman";
+
+/** JSON for a <script> block: `<` is escaped so no string can close the tag. */
+const jsonForScript = (value: unknown): string => JSON.stringify(value).replace(/</g, "\\u003c");
+
+const homeJsonLd = (): string =>
+  jsonForScript({
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: TITLE,
+    description: DESCRIPTION,
+    url: `${ORIGIN}/`,
+    image: IMAGE.url,
+    applicationCategory: "ProductivityApplication",
+    operatingSystem: "Any",
+    browserRequirements: "Requires JavaScript",
+    offers: { "@type": "Offer", price: "0", priceCurrency: "AUD" },
+    keywords: KEYWORDS,
+    sameAs: [REPO_URL],
+  });
+
+export interface HeadOptions {
+  /** The request's pathname. */
+  path: string;
+  /** 404 shells get no canonical and no og:url: they aren't pages. */
+  status: 200 | 404;
+}
+
+const HEAD_TAGS = ({ path, status }: HeadOptions): string => {
+  const self = path === "/" ? `${ORIGIN}/` : `${ORIGIN}${path}`;
+  const tags = [
+    `<meta name="description" content="${escapeXml(DESCRIPTION)}" />`,
+    ...(status === 200 ? [`<link rel="canonical" href="${escapeXml(self)}" />`] : []),
+    `<meta property="og:title" content="${escapeXml(TITLE)}" />`,
+    `<meta property="og:description" content="${escapeXml(DESCRIPTION)}" />`,
     `<meta property="og:type" content="website" />`,
-    `<meta property="og:url" content="${escapeXml(ORIGIN)}/" />`,
-  ].join("\n    ");
+    ...(status === 200 ? [`<meta property="og:url" content="${escapeXml(self)}" />`] : []),
+    `<meta property="og:image" content="${escapeXml(IMAGE.url)}" />`,
+    `<meta property="og:image:width" content="${IMAGE.width}" />`,
+    `<meta property="og:image:height" content="${IMAGE.height}" />`,
+    `<meta property="og:image:type" content="${IMAGE.type}" />`,
+    `<meta property="og:image:alt" content="${escapeXml(IMAGE.alt)}" />`,
+  ];
+  if (path === "/" && status === 200) tags.push(`<script type="application/ld+json">${homeJsonLd()}</script>`);
+  return tags.join("\n    ");
 };
 
-/** Add the description, canonical and Open Graph tags to the built index.html. */
-export const injectHead = (html: string): string => html.replace("</head>", `  ${HEAD_TAGS()}\n  </head>`);
+/** Add the description, canonical, Open Graph tags (and on `/`, the JSON-LD) to the built index.html. */
+export const injectHead = (html: string, opts: HeadOptions): string => html.replace("</head>", `  ${HEAD_TAGS(opts)}\n  </head>`);
+
+// ---------------------------------------------------------------- text inside #root
+
+// Rendered once at startup. React's createRoot().render() replaces it on mount
+// (no hydrateRoot), so people with JavaScript see the app; crawlers and agents
+// that don't run it see this.
+const homeHtml: string = await aboutMarkdown().then((md) => marked.parse(md, { gfm: true })).catch(() => "");
+
+const escapeHtml = escapeXml;
+
+/** Put server-rendered text inside the shell's empty #root. */
+export const fillRoot = (html: string, inner: string): string => html.replace('<div id="root"></div>', () => `<div id="root">${inner}</div>`);
+
+export const homeRoot = (): string => `<main>${homeHtml}</main>`;
+
+/** What #root holds on a 404 shell, until the app mounts and shows its own "not found" view. */
+export const notFoundRoot = (path: string): string => {
+  let shown = path;
+  try {
+    shown = decodeURIComponent(path);
+  } catch {
+    /* show it as sent */
+  }
+  return `<main><h1>No such board</h1><p>There's no board or page at <code>${escapeHtml(shown)}</code>.</p>` +
+  `<ul><li><a href="/">Post-its home</a></li><li><a href="/readme/">README</a></li><li><a href="/docs/">Docs</a></li></ul></main>`;
+};
 
 // ---------------------------------------------------------------- handlers
 

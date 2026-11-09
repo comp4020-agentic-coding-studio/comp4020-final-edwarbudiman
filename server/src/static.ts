@@ -3,7 +3,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, normalize, sep } from "node:path";
 import { marked } from "marked";
 import { config } from "./config.ts";
-import { injectHead } from "./discovery.ts";
+import { USERNAME_RE } from "./auth.ts";
+import { fillRoot, homeRoot, injectHead, notFound, notFoundMarkdown, notFoundRoot, prefersMarkdown } from "./discovery.ts";
+import { SPA_PAGES, underPrefix } from "./routes.ts";
+import type { DB } from "./db.ts";
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -76,9 +79,7 @@ export async function serveReadme(req: IncomingMessage, res: ServerResponse, pat
     const rel = path.slice("/readme/".length);
     const file = safePath(config.rootDir, rel);
     if (file && IMAGE_EXTS.has(extname(file).toLowerCase()) && (await sendFile(res, file, "public, max-age=300"))) return;
-    res.writeHead(404, { "content-type": "text/plain" });
-    res.end("not found");
-    return;
+    return notFound(req, res);
   }
   const md = await readFile(join(config.rootDir, "README.md"), "utf8");
   const body = await marked.parse(md, { gfm: true });
@@ -114,16 +115,49 @@ ${body}
 
 // ---------------------------------------------------------------- the client
 
-/** Built client assets, with the SPA shell for any other page. */
-export async function serveClient(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+/** Which paths get the app shell with a 200; every other extensionless path is a 404. */
+export function shellExists(db: DB, path: string): boolean {
+  if (path === "/") return true;
+  const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
+  const parts = trimmed.split("/").slice(1); // "/a/b" -> ["a", "b"]
+  if (parts.length === 0 || parts.length > 2 || parts.some((p) => !p)) return false;
+  let decoded: string[];
+  try {
+    decoded = parts.map(decodeURIComponent);
+  } catch {
+    return false;
+  }
+  if (parts.length === 1) {
+    const name = decoded[0].toLowerCase();
+    if ((SPA_PAGES as readonly string[]).includes(name) && decoded[0] === name) return true;
+    // a name that can't be a username never reaches the database
+    return USERNAME_RE.test(name) && db.prepare("SELECT 1 FROM users WHERE username = ?").get(name) !== undefined;
+  }
+  const [kind, slug] = decoded;
+  if (kind === "u") return true; // an old link; the app redirects it to /<name>
+  if (kind === "c") return db.prepare("SELECT 1 FROM boards WHERE kind = 'channel' AND slug = ?").get(slug) !== undefined;
+  return false;
+}
+
+/** True when GET `path` would be answered with something other than a 404, decided without reading files. */
+export function getPageExists(db: DB, path: string): boolean {
+  if (["/robots.txt", "/sitemap.xml", "/index.md", "/readme.md", "/mcp"].includes(path)) return true;
+  if (underPrefix(path, ".well-known")) return false;
+  if (underPrefix(path, "readme") || underPrefix(path, "docs")) return true;
+  return !extname(path) && shellExists(db, path);
+}
+
+/** Built client assets, with the SPA shell for the pages that exist and a 404 for the rest. */
+export async function serveClient(db: DB, req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
   if (path !== "/" && extname(path)) {
     const file = safePath(config.clientDir, path);
     const immutable = path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "public, max-age=300";
     if (file && (await sendFile(res, file, immutable))) return;
-    res.writeHead(404, { "content-type": "text/plain" });
-    res.end("not found");
-    return;
+    return notFound(req, res);
   }
+  const found = shellExists(db, path);
+  res.setHeader("vary", "Accept");
+  if (!found && prefersMarkdown(req.headers.accept)) return notFoundMarkdown(req, res);
   const index = join(config.clientDir, "index.html");
   const host = req.headers.host ?? "";
   const csp = [
@@ -133,13 +167,15 @@ export async function serveClient(req: IncomingMessage, res: ServerResponse, pat
     "style-src 'self' 'unsafe-inline'",
     "frame-ancestors 'none'",
   ].join("; ");
+  const status = found ? 200 : 404;
   try {
-    const html = injectHead(await readFile(index, "utf8"));
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache", "content-security-policy": csp });
-    res.end(html);
+    const raw = await readFile(index, "utf8");
+    const shell = fillRoot(injectHead(raw, { path, status }), found ? (path === "/" ? homeRoot() : "") : notFoundRoot(path));
+    res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache", "content-security-policy": csp });
+    res.end(req.method === "HEAD" ? undefined : shell);
   } catch {
     // client not built: still answer, so / is 200 and the spec can run
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.writeHead(status, { "content-type": "text/html; charset=utf-8" });
     res.end("<!doctype html><title>Post-its</title><p>The client hasn't been built yet: run <code>pnpm build</code>.</p>");
   }
 }

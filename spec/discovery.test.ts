@@ -188,10 +188,13 @@ it("unknown /.well-known paths are a 404 text/plain, not the app", async () => {
   }
 });
 
-it("an unknown file at the root stays a 404, and a board named like a file stem stays a board", async () => {
+it("an unknown file at the root is a 404, and a path named like a file stem is the app's 404 page, not the file", async () => {
   expect((await get("/nope.txt")).status).toBe(404);
-  expect((await get("/robots.txt/x")).status).toBe(200); // not a file: the SPA treats it as a board path
-  expect((await get("/robots")).headers.get("content-type")).toMatch(/^text\/html/);
+  for (const path of ["/robots.txt/x", "/robots"]) {
+    const res = await get(path, BROWSER);
+    expect(res.status, path).toBe(404); // no such user
+    expect(res.headers.get("content-type"), path).toMatch(/^text\/html/);
+  }
 });
 
 it("the app shell carries description, canonical and Open Graph tags built from PUBLIC_ORIGIN", async () => {
