@@ -1,90 +1,88 @@
-# A retrospective is not enough: harness changes need tests
+# The retro steers the next session
 
-## Position
+## What I took from the reading
 
-The harness around a coding agent now decides more than the model does. The
-field answers this with retrospectives: after each session, the agent proposes
-changes to its own harness. I argue that a retrospective is necessary but not
-sufficient. Good practice keeps a harness change only when a later session
-shows that it helps.
+Two things from my reading matched what happened in this project. First, a
+retrospective matters because it steers where the next session goes. Second,
+a pile of other people's skills does not help much until you make them your
+own.
 
-## The harness decides
+## A retro is a message to the next session
 
-Böckeler (2026) divides a harness into two parts. *Guides* steer the agent
-before it acts, for example `CLAUDE.md` and skills. *Sensors* show the agent
-the result of its work, for example tests and review agents. Her main claim is
-that teams put too much work into guides and too little into sensors.
+Treude and Baltes (2026) study Matt Pocock's `/retro` skill. At the end of a
+session, the agent looks back at its environment and proposes changes to its
+own harness, such as a line in `CLAUDE.md`. They ran it on 30 SWE-bench
+Verified issues and got 125 proposals. Most of them (101) came from something
+that really happened in the session.
 
-DeepSeek Harness is a good test of this claim. Its design rule is "everything
-is a plugin" (DeepSeek, 2026). Winder.ai (2026) calls this openness an
-advantage, but also says that no part of it is stable yet. freeCodeCamp
-(2026) explains why stability matters: the harness, not the model, decides if
-an agent recovers from a failed tool call or repeats it. Thus an open harness
-is useful only when its parts are stable.
+The part I care about is what happened next. Later sessions loaded the
+changes every time, so a retro really does steer the next session. When the
+change matched the problem, it worked: a two-line `CLAUDE.md` note naming the
+right test command took wasted test attempts from 5 of 5 sessions to 0 of 5.
+When the change did not match, it did nothing or even added work. The
+authors' point is that a change has to be checked on later tasks and removed
+if it does not help.
 
-## Guides pile up
+Shinn et al. (2023) show the same idea earlier, in Reflexion. After a failed
+try, the agent writes a short reflection in plain words and keeps it in
+memory, and the next try reads it. That written note, not new training, is
+what made the next attempt better.
 
-Practitioners now share guides as skills, for example Pocock's `grill-me`
-(2026) and Tan's pstack (2026). One command installs a skill, so a local
-harness fills with guides that nobody tests. A guide cannot tell you when it
-stops working. Böckeler names the gap: no tool measures the coverage of a
-harness.
+This is why my reflect stage now runs `/retro` first. It is the last thing an
+idea does, and its output is the first thing the next idea reads. I also try
+to keep only the changes that a later idea shows are useful.
 
-My own project shows the same problem. I installed many skills after I read
-about them on X. They stayed on my computer, and almost none of them got to a
-pull request. More reading did not sort them. A process with sensors did: a
-spike, my judgement, a review, and then a merge. Parallel agent sessions make
-this more necessary, because one person cannot watch every session.
+## Skills only help when they are yours
 
-## A retrospective is a sensor on the harness
+A post by Addy Osmani (2026), "You're probably overprompting Claude", said
+what I felt. His point is that newer models need less instruction than most
+of us still give them. He suggests an experiment: remove some of your
+instructions, then add back only the ones the model misses. He also says to
+"audit how you work" every few months, so you are not building for how older
+models used to work.
 
-Pocock's `/retro` skill (AI Hero, 2026) is a direct attempt to close this
-gap. It does not examine the code. It examines the environment. Could the
-agent find the correct files? Could a check find its mistake? Which lines in
-`CLAUDE.md` changed nothing?
+That matched my experience. There are already so many skills out there, and
+I installed and read a lot of them, but none of them were personal, and
+almost none of them got into a pull request. Piling them up was the
+overprompting he describes. What worked was to sit down, try them, and keep
+only what I actually needed in my own pipeline. Once I wrote my own roles
+and scripts, the work started moving.
 
-Treude and Baltes (2026) give the first empirical data on `/retro`. After 30
-SWE-bench Verified sessions, it made 125 proposals, and most came from real
-events in the session. Thus a retrospective finds real faults. But the
-results of the changes were weak. Of seven changes that the authors could
-evaluate, two stopped the repeated action, one decreased it and four had no
-effect. One change added work on a different issue. Only 9 of 38 proposed
-checks could fail as written.
+He also warns that parallel sessions "only pay off once a single session can
+finish without you". This is a fair check on my pipeline, which runs several
+roles side by side. It only works because each role has a clear goal and a
+check it can run on its own, and because I step in only at the taste gates.
 
-## The counter-case
+Wang et al. (2023) show a similar thing with Voyager, an agent that plays
+Minecraft. It does not start with a fixed set of skills. It writes its own
+skills as code, tests them, keeps the ones that work, and builds new skills
+on top of old ones. Its skill library grows from its own experience, so it
+fits the problems it actually meets.
 
-A practitioner can say that a weak change costs little, so it is better to
-keep every proposal. The data does not support this. Bundled instructions
-sometimes made sessions longer, and a change from one issue added work on
-another. Each guide that you keep costs tokens and attention in every later
-session. The authors conclude that self-evolution "needs ways to establish
-whether a change helps".
+My pipeline grew the same way. Each skill and role came from a problem I hit:
+`mise exec` after agents could not find Node, session resume after a Herdr
+restart, and `/retro` after reflection kept looking at the code instead of
+the setup.
 
-## Good practice
+## What I take from this
 
-The changes that worked were facts about the repository, for example the name
-of the test runner. The changes that failed were lists from one session. This
-gives a clear rule. Run a retrospective after each session. Keep a change
-only when it applies to the full repository and a check can test it. Then
-test it again on a later session, and remove it when it does not help. The
-open question is how to measure a harness well enough to make that decision
-automatically.
+A setup works best when it is personal and when it learns from each session.
+Borrowed skills are a good place to start, but they need to become your own.
+A retro is how the setup keeps learning, as long as I check that its changes
+really help.
 
 ## References
 
-- AI Hero (2026). *The /retro Skill.* https://www.aihero.dev/skills-retro
-- Böckeler, B. (2026). *Harness Engineering for Coding Agent Users.*
-  martinfowler.com. https://martinfowler.com/articles/harness-engineering.html
-- DeepSeek (2026, 13 August). *DeepSeek Harness v0.1 Developer Preview.*
-  https://x.com/deepseek_ai/status/2087887408440164663
-- freeCodeCamp (2026). *What Is an Agent Harness?*
-  https://www.freecodecamp.org/news/what-is-an-agent-harness/
+- Osmani, A. (2026). *You're probably overprompting Claude.* Post on X.
+  https://x.com/addyosmani/status/2115688494865465370
 - Pocock, M. (2026). *Skills for Real Engineers.*
   https://github.com/mattpocock/skills
-- Tan, L. (2026). *pstack.* Claude Code port:
-  https://github.com/michael-denyer/pstack-claude
+- Shinn, N., Cassano, F., Berman, E., Gopinath, A., Narasimhan, K., & Yao, S.
+  (2023). *Reflexion: Language Agents with Verbal Reinforcement Learning.*
+  arXiv:2303.11366. https://arxiv.org/abs/2303.11366
 - Treude, C., & Baltes, S. (2026). *How Do Coding-Agent Harnesses Self-Evolve?
   An Empirical Study of Retrospective Adaptation.* arXiv:2610.34938.
   https://arxiv.org/abs/2610.34938
-- Winder.ai (2026). *A Comparison of AI Agent Harnesses in 2026.*
-  https://winder.ai/ai-agent-harness-comparison/
+- Wang, G., Xie, Y., Jiang, Y., Mandlekar, A., Xiao, C., Zhu, Y., Fan, L., &
+  Anandkumar, A. (2023). *Voyager: An Open-Ended Embodied Agent with Large
+  Language Models.* arXiv:2305.16291. https://arxiv.org/abs/2305.16291
