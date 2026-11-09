@@ -10,8 +10,8 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
      starter board, archive done notes, a note-details sidebar with proof and comments
      (more-ideas.md), and the spine F (MCP triage), G (discoverability), H (offline). -->
 
+- `agent-readiness-fixes` — research (lead-1 spawned) — live scan fixes from agent-discovery: real 404s for unknown boards, homepage text without JS, og:image + JSON-LD. Owner approved items 1–3; merge before agent-discovery brief 2
 - `label-sections` — brief 2 approved, PR open (reviewer-3 approved 94038cb: filter frames the ticked sections; PR #5 merged 6805847) — zones, no overlap, owner+members edit; drop per-note labels; a toolbar tool draws named label sections on the board that group the notes inside them
-- `agent-discovery` — brief 1 merged (PR #7, 5c5fb2e); brief 2 waits for agent-mcp; small) — checkpoint G: robots/sitemap/llms.txt, markdown negotiation, documented /api with a pointer to tokens and /mcp. Builds after agent-mcp merges
 
 ## Decisions
 
@@ -24,6 +24,7 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 
 <!-- Decide sessions, taste gates (with the /taste reminder), merges, blocked dialogs. -->
 - Route-guard follow-up (from note-sidebar reviewer-5): spec/routes.test.ts misses new SPA pages in main.tsx and `path ===` server dispatch. Migration 7 wipes note statuses on deploy.
+- agent-discovery brief 2 (after agent-mcp merges): llms.txt, /.well-known/api-catalog, one MCP discovery file, /auth.md, openapi.json (token routes only) with a drift test, pages in /docs/agents/. Start it as a new idea; decision and brief 1 are in .claude/orch/agent-discovery/ and docs/ideas/agent-discovery/ (on main). agent-readiness-fixes should merge first (both touch server/src/discovery.ts).
 
 
 ## Reflections
@@ -44,3 +45,4 @@ The orchestrator's memory for the Herdr pipeline (`.claude/skills/orchestrate-po
 - docs-site, merge 6818997, 2026-11-09, no feature page (the docs site itself)
 - note-sidebar, merge 0167ee3, 2026-11-09
 - agent-mcp, merge 76456af, 2026-11-09
+- agent-discovery, merge 5c5fb2e, 2026-11-09
