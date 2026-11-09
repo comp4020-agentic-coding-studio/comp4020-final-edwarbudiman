@@ -82,6 +82,17 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+/**
+ * Every route that accepts a personal `pi_` token (`requireUserAny`). It is the
+ * one list dispatch (index.ts) routes from and /openapi.json is built from, so a
+ * token route can't exist without being in the spec: buildOpenApi throws for an
+ * operationId it has no description of, and spec/openapi.test.ts scans the
+ * sources so that `requireUserAny` is only called from a handler listed here.
+ */
+export const TOKEN_ROUTES: readonly { method: "POST"; path: string; operationId: string; handler: (db: DB, req: IncomingMessage, res: ServerResponse) => Promise<void> }[] = [
+  { method: "POST", path: "/mcp", operationId: "callPostitsTool", handler: (db, req, res) => handleMcp(db, req, res) },
+];
+
 export async function handleMcp(db: DB, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const rpcFail = (status: number, code: number, message: string, headers: Record<string, string> = {}) =>
     sendJson(res, status, fail(null, code, message), headers);

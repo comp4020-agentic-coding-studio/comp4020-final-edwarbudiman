@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiTokenInfo, changePassword, login, logout, makeApiToken, publicUser, requireUser, revokeApiToken, seedDemo, signup, updateMe } from "./auth.ts";
-import { handleMcp } from "./agent.ts";
+import { TOKEN_ROUTES } from "./agent.ts";
 import { channelBoard, createArrow, createChannel, createNote, createSection, deleteArrow, deleteSection, updateSection, deleteNote, updateArrow, directory, forgetPerson, joinChannel, leaveChannel, listChannels, sidebar, stats, updateAccess, updateNote, userBoard } from "./boards.ts";
 import { addComment, deleteComment, editComment, readSide, setProof, setStatus } from "./side.ts";
 import { config } from "./config.ts";
@@ -196,7 +196,8 @@ async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void
     throw new HttpError(pathMatched ? 405 : 404, pathMatched ? "method not allowed" : "no such endpoint");
   }
   // the agent endpoint: no Origin needed (agents aren't browsers), its own auth
-  if (path === "/mcp") return handleMcp(db, req, res);
+  const tokenRoute = TOKEN_ROUTES.find((r) => r.path === path);
+  if (tokenRoute) return tokenRoute.handler(db, req, res);
   // a path that wouldn't exist under GET is a 404 whatever the method; only a
   // path that does exist can be answered 405
   if (method !== "GET" && method !== "HEAD") {

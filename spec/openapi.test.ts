@@ -1,5 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import { TOOLS } from "../server/src/agent.ts";
+import { TOKEN_ROUTES, TOOLS } from "../server/src/agent.ts";
 import { baseUrl } from "./helpers.ts";
 
 // /openapi.json describes the one token-authed route (POST /mcp) and /llms.txt
@@ -34,17 +35,53 @@ it("every operation has a unique operationId, a summary, a description and typed
   expect(new Set(ids).size).toBe(ids.length);
 });
 
-it("drift: the spec covers exactly the token routes and every MCP tool", () => {
-  // the only route requireUserAny accepts a bearer token on is /mcp
-  expect(Object.keys(spec.paths)).toEqual(["/mcp"]);
-  expect(Object.keys(spec.paths["/mcp"])).toEqual(["post"]);
-  const described = spec.components.schemas.RpcRequest.oneOf
-    .filter((s: any) => s.properties.method.const === "tools/call")
-    .map((s: any) => s.properties.params.properties.name.const);
+it("drift: every token route is in the spec, and no route outside TOKEN_ROUTES takes a token", () => {
+  // 1. each registered token route is a path + method in the spec, with its operationId
+  for (const r of TOKEN_ROUTES) {
+    const op = spec.paths[r.path]?.[r.method.toLowerCase()];
+    expect(op, `${r.method} ${r.path} is missing from /openapi.json`).toBeDefined();
+    expect(op.operationId).toBe(r.operationId);
+  }
+  expect(Object.values<any>(spec.paths).flatMap((item) => Object.keys(item)).length).toBe(TOKEN_ROUTES.length);
+
+  // 2. requireUserAny (the one check that accepts a bearer token) is called only
+  // by handlers registered in TOKEN_ROUTES. Each call site is in agent.ts, and
+  // there are as many as there are routes: a token route added anywhere else, or
+  // without being listed, adds a call site and fails here.
+  const dir = new URL("../server/src/", import.meta.url);
+  const sites = readdirSync(dir)
+    .filter((f) => f.endsWith(".ts"))
+    .flatMap((f) => (readFileSync(new URL(f, dir), "utf8").match(/\brequireUserAny\(/g) ?? []).map(() => f))
+    .filter((f) => f !== "auth.ts"); // auth.ts only defines it
+  expect(sites, "requireUserAny is called outside agent.ts, or by more handlers than TOKEN_ROUTES lists").toEqual(TOKEN_ROUTES.map(() => "agent.ts"));
+});
+
+it("drift: the spec describes every MCP tool with its own input schema", () => {
+  const messages = spec.components.schemas.RpcMessage.oneOf;
+  const described = messages.filter((s: any) => s.properties.method.const === "tools/call").map((s: any) => s.properties.params.properties.name.const);
   expect(described.sort()).toEqual(TOOLS.map((t) => t.name).sort());
   for (const tool of TOOLS) {
-    const s = spec.components.schemas.RpcRequest.oneOf.find((o: any) => o.title === tool.name);
+    const s = messages.find((o: any) => o.title === tool.name);
     expect(s.properties.params.properties.arguments, tool.name).toEqual(JSON.parse(JSON.stringify(tool.inputSchema)));
+  }
+});
+
+it("the request schema takes one message or a batch of 1 to 20, and a notification needs no id", () => {
+  const { RpcRequest, RpcMessage, RpcResponse } = spec.components.schemas;
+  expect(RpcRequest.oneOf).toContainEqual({ type: "array", minItems: 1, maxItems: 20, items: { $ref: "#/components/schemas/RpcMessage" } });
+  expect(RpcResponse.oneOf.some((s: any) => s.type === "array" && s.maxItems === 20)).toBe(true);
+  for (const m of RpcMessage.oneOf) expect(m.required).not.toContain("id");
+});
+
+it("/openapi.json is vnd.oai.openapi+json when asked for, application/json otherwise, and varies on Accept", async () => {
+  const asked = await get("/openapi.json", { accept: "application/vnd.oai.openapi+json" });
+  expect(asked.headers.get("content-type")).toMatch(/^application\/vnd\.oai\.openapi\+json/);
+  expect(asked.headers.get("vary")).toMatch(/accept/i);
+  expect((await asked.json()).openapi).toBe("3.1.0");
+  for (const accept of ["*/*", "application/json", "text/html", "application/vnd.oai.openapi+json;q=0"]) {
+    const res = await get("/openapi.json", { accept });
+    expect(res.headers.get("content-type"), accept).toMatch(/^application\/json/);
+    expect(res.headers.get("vary"), accept).toMatch(/accept/i);
   }
 });
 

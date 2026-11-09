@@ -141,7 +141,7 @@ export function shellExists(db: DB, path: string): boolean {
   return false;
 }
 
-/** True when GET `path` would be answered with something other than a 404, decided without reading files. */
+/** True when GET `path` would be answered with something other than a 404. Checks the database and (for /readme/ images) the disk. */
 export async function getPageExists(db: DB, path: string): Promise<boolean> {
   if (["/robots.txt", "/sitemap.xml", "/index.md", "/readme.md", "/openapi.json", "/llms.txt", "/mcp"].includes(path)) return true;
   if (underPrefix(path, ".well-known")) return false;
